@@ -86,8 +86,11 @@ export default function ProjectManageTab() {
       if (pjtRes.error) {
         // 대개 migration 002 (sort_order/색 컬럼) 미적용
         console.error('[ProjectManageTab] 프로젝트 로드 실패', pjtRes.error)
+        // 원인별 안내: 컬럼 없음(42703)일 때만 마이그레이션 안내, 그 외엔 실제 에러 메시지 표시
         setLoadError(
-          'PJT 데이터를 불러오지 못했습니다. migrations/002-tag-color-and-sort.sql 이 적용됐는지 확인하세요.',
+          pjtRes.error.code === '42703'
+            ? 'PJT 데이터를 불러오지 못했습니다. migrations/002-tag-color-and-sort.sql 이 적용됐는지 확인하세요.'
+            : `PJT 데이터를 불러오지 못했습니다: ${pjtRes.error.message ?? '알 수 없는 오류'} (환경변수·네트워크를 확인하세요)`,
         )
         setProjects([])
       } else {
