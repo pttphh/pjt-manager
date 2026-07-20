@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>프로젝트 관리 툴 v2 — 최종 와이어프레임</title>
+<style>
+  :root{
+    --s1:#F5F4F0; --s2:#FFFFFF; --bd:#E2E0DB; --bds:#CFCDC7;
+    --t1:#1F1E1B; --t2:#55534E; --t3:#8A877F;
+    --blue:#185FA5; --blue-bg:#E6F1FB; --blue-tx:#0C447C;
+    --green:#085041; --green-bg:#E1F5EE;
+    --amber:#633806; --amber-bg:#FAEEDA; --amber-bd:#E0C9A6;
+    --red:#A32D2D; --red-bg:#FCEBEB; --red-tx:#791F1F;
+    --purple-bg:#EEEDFE; --purple-tx:#3C3489;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'Pretendard','Malgun Gothic',sans-serif;background:#EDEBE6;color:var(--t1);margin:0;padding:32px;font-size:13px;line-height:1.5;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .sub{color:var(--t3);font-size:12px;margin:0 0 28px;}
+  section{max-width:920px;margin:0 auto 36px;}
+  section>h2{font-size:14px;color:var(--t2);margin:0 0 8px;}
+  section>h2 small{font-weight:400;color:var(--t3);}
+  .frame{background:var(--s2);border:1px solid var(--bd);border-radius:12px;overflow:hidden;}
+  .badge{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;}
+  .b-blue{background:var(--blue-bg);color:var(--blue-tx);} .b-green{background:var(--green-bg);color:var(--green);}
+  .b-amber{background:var(--amber-bg);color:var(--amber);} .b-red{background:var(--red-bg);color:var(--red-tx);}
+  .b-purple{background:var(--purple-bg);color:var(--purple-tx);}
+  .chip{display:inline-block;background:var(--s1);border:1px solid var(--bd);padding:1px 9px;border-radius:999px;font-size:11px;}
+  .btn{display:inline-block;border:1px solid var(--bds);border-radius:8px;padding:5px 12px;font-size:12px;background:var(--s2);cursor:default;}
+  .btn-p{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .btn-dash{border-style:dashed;width:100%;text-align:center;color:var(--t2);}
+  .btn-done{border-color:#9CC9B8;color:var(--green);}
+  .input{border:1px solid var(--bds);border-radius:8px;padding:6px 10px;font-size:12px;background:#fff;color:var(--t3);}
+  .tabs{display:flex;gap:4px;font-size:13px;}
+  .tab{padding:5px 12px;color:var(--t3);}
+  .tab.on{color:var(--t1);border-bottom:2px solid var(--blue);font-weight:600;}
+  .muted{color:var(--t3);} .small{font-size:11px;} .tiny{font-size:10px;}
+  .card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .sec-label{font-size:12px;font-weight:600;color:var(--t2);margin:0 0 6px;}
+  .divider{border-top:1px solid var(--bd);margin:12px 0;}
+  .overlay{background:rgba(0,0,0,.45);padding:28px;display:flex;justify-content:center;align-items:flex-start;gap:16px;}
+  .modal{background:#fff;border-radius:12px;padding:20px;width:100%;}
+  .layout{display:grid;grid-template-columns:180px 1fr;}
+  .sidebar{background:var(--s1);border-right:1px solid var(--bd);padding:14px 12px;font-size:12px;}
+  .sb-item{margin:0 0 4px;color:var(--t2);font-weight:600;}
+  .sb-pjt{margin:0 0 3px 14px;color:var(--t1);font-weight:400;}
+  .main{padding:14px 16px;}
+  .fchip{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid var(--bds);color:var(--t2);font-size:11px;}
+  .fchip.on{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .note{font-size:10px;color:var(--t3);margin:8px 0 0;}
+  s{color:var(--t3);}
+</style>
+</head>
+<body>
+
+<h1>프로젝트 관리 툴 v2 — 최종 와이어프레임</h1>
+<p class="sub">2026.07 확정본. 상세 규칙은 prd-v2.md / CLAUDE.md 참조. PC 전용.</p>
+
+<!-- ============ 1. 비밀번호 ============ -->
+<section>
+  <h2>1. 비밀번호 입력 <small>/ — 역할 선택 없음, 전원 동일 권한</small></h2>
+  <div class="frame" style="padding:48px;display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <div style="font-size:15px;font-weight:600;">프로젝트 관리 툴</div>
+    <input class="input" style="width:200px;text-align:center;" value="비밀번호">
+    <span class="btn btn-p" style="width:200px;text-align:center;">입장</span>
+    <span class="small" style="color:var(--red);">비밀번호가 올바르지 않습니다</span>
+  </div>
+</section>
+
+<!-- ============ 2. Todo 체크 탭 ============ -->
+<section>
+  <h2>2. 메인 — Todo 체크 탭 <small>배포된 Task의 Todo만 · 구분 필터 칩 포함</small></h2>
+  <div class="frame layout">
+    <div class="sidebar">
+      <div style="font-weight:600;font-size:13px;margin-bottom:12px;">프로젝트 관리 툴</div>
+      <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:6px;padding:5px 8px;font-weight:600;margin-bottom:10px;">전체</div>
+      <p class="sb-item">▾ Biz 일반</p>
+      <p class="sb-pjt">📁 경영기획 PJT</p>
+      <p class="sb-item">▾ 유맥</p>
+      <p class="sb-pjt">📁 군산 턴어라운드</p>
+      <p class="sb-pjt">📁 원가 개선 PJT</p>
+      <p class="sb-item">▸ 다담</p>
+      <p class="sb-item">▸ 시네마</p>
+      <p class="sb-item">▸ ITC</p>
+      <p class="sb-item">▾ 개인</p>
+      <p class="sb-pjt">📁 독서 습관</p>
+      <p class="note">PJT 클릭 → PJT 세부화면 · ↔ 드래그 너비 조절(160~320px)</p>
+    </div>
+    <div class="main">
+      <div class="tabs" style="margin-bottom:10px;">
+        <span class="tab on">Todo 체크</span><span class="tab">Tasks 배포</span><span class="tab">PJT 관리</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <span class="fchip on">전체</span><span class="fchip">Biz 일반</span><span class="fchip">유맥</span><span class="fchip">다담</span><span class="fchip">시네마</span><span class="fchip">ITC</span><span class="fchip">개인</span>
+      </div>
+
+      <p class="sec-label" style="color:var(--amber);">⚠ 미진행 Todo</p>
+      <div class="card" style="border-color:var(--amber-bd);padding:0;overflow:hidden;">
+        <div class="row" style="background:var(--amber-bg);padding:9px 12px;">
+          <span style="font-weight:600;color:var(--amber);">▾ 원가 구조 분석 (배포 7/14) <span class="small" style="font-weight:400;">— 군산 턴어라운드</span></span>
+          <span class="tiny" style="color:var(--amber);">미진행 1건</span>
+        </div>
+        <div style="padding:10px 12px 12px 24px;">
+          <div class="row" style="margin-bottom:6px;">
+            <span>□ 원가 데이터 수집 <span class="badge" style="border:1px solid var(--bd);color:var(--t2);">미진행</span></span>
+            <span class="tiny muted">담당: 김OO, 박OO</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <input class="input" style="flex:1;" value="진행사항 메모 입력…">
+            <span class="btn">저장</span>
+          </div>
+          <p class="note">저장 시 '체크' 전환 → 아래 구간 이동 (체크→미진행 되돌리기 가능)</p>
+        </div>
+      </div>
+      <div class="card row" style="border-color:var(--amber-bd);background:var(--amber-bg);">
+        <span style="font-weight:600;color:var(--amber);">▸ TFT 1차 회의 (배포 7/15) <span class="small" style="font-weight:400;">— 가맹사업 TFT</span></span>
+        <span class="tiny" style="color:var(--amber);">미진행 3건</span>
+      </div>
+
+      <div class="divider"></div>
+      <p class="sec-label">체크됨 (진행 중)</p>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="row" style="background:var(--s1);padding:9px 12px;">
+          <span style="font-weight:600;">▾ 원가 구조 분석 (배포 7/14) <span class="small muted" style="font-weight:400;">— 군산 턴어라운드</span></span>
+          <span class="tiny muted">체크 2건</span>
+        </div>
+        <div style="padding:10px 12px 12px 24px;">
+          <div class="row" style="margin-bottom:6px;">
+            <span>◐ 경쟁사 벤치마크 <span class="badge b-blue">체크</span></span>
+            <span class="tiny muted">담당: 박OO</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+            <span style="flex:1;background:var(--s1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--t2);"><span class="muted">7/16</span> — 3개사 자료 확보, 정리 중</span>
+            <span class="btn btn-done">✓ 완료로 변경</span>
+          </div>
+          <div class="row" style="margin-bottom:6px;">
+            <span>◐ 원가 항목 분류 <span class="badge b-blue">체크</span></span>
+            <span class="tiny muted">담당: 김OO</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span style="flex:1;background:var(--s1);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--t2);"><span class="muted">7/15</span> — 항목 분류표 초안 작성 완료</span>
+            <span class="btn btn-done">✓ 완료로 변경</span>
+          </div>
+        </div>
+      </div>
+      <p class="note">완료 Todo는 이 화면에서 제거 · Task의 전 Todo 완료 시 Task도 제거 (PJT 세부화면에서 열람)</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. Tasks 배포 탭 ============ -->
+<section>
+  <h2>3. 메인 — Tasks 배포 탭 <small>새 Task 작성 버튼 없음 (Task 작성은 PJT 세부화면)</small></h2>
+  <div class="frame main">
+    <div class="tabs" style="margin-bottom:14px;">
+      <span class="tab">Todo 체크</span><span class="tab on">Tasks 배포</span><span class="tab">PJT 관리</span>
+    </div>
+    <p class="sec-label" style="color:var(--amber);">✎ 미배포 (작성중)</p>
+    <div class="card row" style="border-color:var(--amber-bd);background:var(--amber-bg);">
+      <span style="font-weight:600;color:var(--amber);">설비 투자 검토 (작성 7/16) <span class="small" style="font-weight:400;">— 군산 턴어라운드</span></span>
+      <span class="btn">내용보기</span>
+    </div>
+    <div class="card row" style="border-color:var(--amber-bd);background:var(--amber-bg);">
+      <span style="font-weight:600;color:var(--amber);">독서 리스트 선정 (작성 7/15) <span class="small" style="font-weight:400;">— 독서 습관</span></span>
+      <span class="btn">내용보기</span>
+    </div>
+    <div class="divider"></div>
+    <p class="sec-label">배포됨 <span class="tiny muted" style="font-weight:400;">— 진행 중 Task만, 전 Todo 완료 시 제거</span></p>
+    <div class="card row">
+      <span style="font-weight:600;">원가 구조 분석 (배포 7/14) <span class="small muted" style="font-weight:400;">— 군산 턴어라운드</span></span>
+      <span><span class="tiny muted">Todo 1/4 완료</span> <span class="btn">내용보기</span></span>
+    </div>
+    <div class="card row">
+      <span style="font-weight:600;">TFT 1차 회의 (배포 7/15) <span class="small muted" style="font-weight:400;">— 가맹사업 TFT</span></span>
+      <span><span class="tiny muted">Todo 0/3 완료</span> <span class="btn">내용보기</span></span>
+    </div>
+    <p class="note">'내용보기' = Task 팝업(6번). 보기/편집 겸용 단일 창.</p>
+  </div>
+</section>
+
+<!-- ============ 4. PJT 관리 탭 ============ -->
+<section>
+  <h2>4. 메인 — PJT 관리 탭 <small>태그별 컬럼 · 복수 태그 중복 노출 · 태그 없음 컬럼</small></h2>
+  <div class="frame main">
+    <div class="row" style="margin-bottom:8px;">
+      <div class="tabs">
+        <span class="tab">Todo 체크</span><span class="tab">Tasks 배포</span><span class="tab on">PJT 관리</span>
+      </div>
+      <span class="btn">+ PJT 등록</span>
+    </div>
+    <p class="tiny muted" style="margin:0 0 10px;">
+      <span style="display:inline-block;width:9px;height:9px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:2px;"></span> 미진행
+      <span style="display:inline-block;width:9px;height:9px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:2px;margin-left:8px;"></span> 진행중
+      <span style="display:inline-block;width:9px;height:9px;background:var(--red-bg);border:1px solid var(--red);border-radius:2px;margin-left:8px;"></span> 보류
+      &nbsp;· 완료 PJT는 설정창에서 열람 · 카드 클릭 → PJT 세부화면
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;">
+      <div style="background:var(--s1);border-radius:10px;padding:8px;">
+        <p class="small" style="margin:0 0 8px;"><span class="badge b-green" style="font-weight:600;">Biz 성과관리</span> <span class="muted">3</span></p>
+        <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 9px;margin-bottom:6px;">26년 월례포럼 양식 변경</div>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;margin-bottom:6px;">군산 턴어라운드</div>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;">원가 개선 PJT</div>
+      </div>
+      <div style="background:var(--s1);border-radius:10px;padding:8px;">
+        <p class="small" style="margin:0 0 8px;"><span class="badge b-red" style="font-weight:600;">Biz 조직운영</span> <span class="muted">3</span></p>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;margin-bottom:6px;">그룹사 조직문화 설계</div>
+        <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 9px;margin-bottom:6px;">파트장 육성 PJT</div>
+        <div style="background:var(--red-bg);color:var(--red-tx);border-radius:8px;padding:8px 9px;">임원 인사평가 개편</div>
+      </div>
+      <div style="background:var(--s1);border-radius:10px;padding:8px;">
+        <p class="small" style="margin:0 0 8px;"><span class="badge b-purple" style="font-weight:600;">Biz 전략기획</span> <span class="muted">3</span></p>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;margin-bottom:6px;">가맹사업 TFT</div>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;margin-bottom:6px;">군산 턴어라운드</div>
+        <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 9px;">식자재 유통 M&amp;A</div>
+      </div>
+      <div style="background:var(--s1);border-radius:10px;padding:8px;">
+        <p class="small" style="margin:0 0 8px;"><span class="badge b-amber" style="font-weight:600;">Life 여유</span> <span class="muted">2</span></p>
+        <div style="background:var(--blue-bg);color:var(--blue-tx);border-radius:8px;padding:8px 9px;margin-bottom:6px;">독서 습관</div>
+        <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 9px;">퇴직연금 자산관리</div>
+      </div>
+      <div style="background:var(--s1);border-radius:10px;padding:8px;">
+        <p class="small" style="margin:0 0 8px;"><span class="badge" style="border:1px solid var(--bd);color:var(--t2);font-weight:600;">태그 없음</span> <span class="muted">1</span></p>
+        <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 9px;">삼성전자 자금 관리</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. PJT 세부화면 ============ -->
+<section>
+  <h2>5. PJT 세부화면 <small>/project/:id — 사이드바 PJT 클릭 또는 PJT 관리 카드 클릭</small></h2>
+  <div class="frame main">
+    <p class="small muted" style="margin:0 0 10px;">← PJT 관리로</p>
+    <div class="card" style="padding:12px 14px;">
+      <div class="row" style="margin-bottom:10px;">
+        <span style="font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span class="badge b-blue" style="padding:3px 9px;border-radius:6px;">진행중 ▾</span> 군산 턴어라운드
+        </span>
+        <span class="small muted">✎ 편집 <span class="tiny">(편집 팝업에 삭제 버튼 포함)</span></span>
+      </div>
+      <div style="font-size:12px;color:var(--t2);line-height:2.1;">
+        <p style="margin:0;"><span class="muted" style="display:inline-block;width:88px;">구분 · 태그</span> <span class="badge b-amber">유맥</span> <span class="badge b-green">Biz 성과관리</span> <span class="badge b-purple">Biz 전략기획</span></p>
+        <p style="margin:0;"><span class="muted" style="display:inline-block;width:88px;">기간</span> 시작 2026.05.01 — 완료 예정 2026.12.31</p>
+        <p style="margin:0;"><span class="muted" style="display:inline-block;width:88px;">멤버</span> <span class="chip">김OO</span> <span class="chip">박OO</span> <span class="chip">이OO</span></p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:12px;">
+      <div>
+        <p class="sec-label">Tasks</p>
+        <span class="btn btn-dash" style="display:block;margin-bottom:6px;">+ 신규 Task 등록</span>
+        <span class="btn" style="display:block;text-align:left;margin-bottom:6px;">26.07.17 설비 투자 검토</span>
+        <span class="btn" style="display:block;text-align:left;margin-bottom:6px;">26.07.14 원가 구조 분석</span>
+        <span class="btn" style="display:block;text-align:left;margin-bottom:6px;">26.07.10 군산 PJT 1차 회의</span>
+        <span class="btn" style="display:block;text-align:left;">26.05.01 기타 <span class="tiny muted">(자동 생성 상설 Task)</span></span>
+      </div>
+      <div>
+        <p class="sec-label">Todo <span class="tiny muted" style="font-weight:400;">— project_id 매칭 전체 (미배포 Task 포함), 체크박스 직접 체크/해제</span></p>
+        <div class="card">
+          <p style="margin:0 0 6px;">☐ 원가 데이터 수집 <span class="tiny muted">— 김OO, 박OO</span></p>
+          <p style="margin:0 0 6px;">☐ 경쟁사 벤치마크 <span class="tiny muted">— 박OO</span></p>
+          <p style="margin:0 0 6px;">☐ 투자비 산출 <span class="tiny muted">— 김OO</span></p>
+          <div class="divider" style="margin:8px 0;"></div>
+          <p style="margin:0 0 6px;" class="muted">☑ <s>원가 항목 분류</s> <span class="tiny">— 김OO</span></p>
+          <p style="margin:0;" class="muted">☑ <s>회의록 공유</s> <span class="tiny">— 이OO</span></p>
+        </div>
+        <p class="note">체크 → 완료 · 해제 → 메모 있으면 '체크', 없으면 '미진행' 복귀</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. Task 팝업 ============ -->
+<section>
+  <h2>6. Task 팝업 <small>보기/편집 겸용 단일 창 — 신규 등록·기존 Task 클릭·'내용보기' 공통</small></h2>
+  <div class="frame overlay">
+    <div class="modal" style="max-width:620px;">
+      <div class="row" style="margin-bottom:2px;">
+        <span style="font-size:15px;font-weight:600;">Task 작성</span><span class="muted">✕</span>
+      </div>
+      <p class="small muted" style="margin:0 0 14px;">소속 PJT: 군산 턴어라운드 (고정)</p>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px;">
+        <div><p class="small" style="color:var(--t2);margin:0 0 4px;">Task명</p><input class="input" style="width:100%;" value="설비 투자 검토"></div>
+        <div><p class="small" style="color:var(--t2);margin:0 0 4px;">날짜 <span class="tiny muted">기본: 작성일</span></p><input class="input" style="width:100%;color:var(--t1);" value="2026.07.17"></div>
+      </div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">멤버 <span class="tiny muted">— 기본: PJT 멤버 전원</span></p>
+      <div style="border:1px solid var(--bds);border-radius:8px;padding:6px 8px;display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="chip">김OO ✕</span><span class="chip">박OO ✕</span><span class="chip">이OO ✕</span><span class="small muted">+ 추가</span>
+      </div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">결정 &amp; 전달 사항</p>
+      <div style="border:1px solid var(--bds);border-radius:8px;padding:8px 10px;height:64px;font-size:12px;color:var(--t2);margin-bottom:12px;">· 노후 라인 2기 교체는 4분기로 연기<br>· 투자비 상한 00억, 초과 시 재보고</div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">Todo <span class="tiny muted">— 상태 표기·변경 없음</span></p>
+      <div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:3fr 120px 140px 20px;gap:8px;font-size:10px;color:var(--t3);margin-bottom:4px;">
+          <span>내용</span><span>담당자 (멤버 중 복수)</span><span>PJT</span><span></span>
+        </div>
+        <div style="display:grid;grid-template-columns:3fr 120px 140px 20px;gap:8px;align-items:center;margin-bottom:6px;">
+          <input class="input" style="color:var(--t1);" value="노후 라인 2기 교체 투자비 산출 및 회수기간 검토">
+          <span class="input" style="color:var(--blue-tx);border-color:var(--blue);">김OO, 박OO ▴</span>
+          <span class="input" style="color:var(--t2);">군산 턴어라운드 ▾</span>
+          <span class="muted">🗑</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+          <div style="width:160px;margin-right:168px;background:#fff;border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:8px 10px;font-size:11px;">
+            <p class="tiny muted" style="margin:0 0 5px;">담당자 선택 (멤버 중)</p>
+            <p style="margin:0 0 4px;color:var(--blue-tx);">☑ 김OO</p>
+            <p style="margin:0 0 4px;color:var(--blue-tx);">☑ 박OO</p>
+            <p style="margin:0;" class="muted">☐ 이OO</p>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:3fr 120px 140px 20px;gap:8px;align-items:center;margin-bottom:8px;">
+          <input class="input" style="color:var(--t1);" value="유휴설비 매각 검토">
+          <span class="input" style="color:var(--t2);">박OO ▾</span>
+          <span class="input" style="color:var(--blue-tx);border-color:var(--blue);">원가 개선 PJT ▾</span>
+          <span class="muted">🗑</span>
+        </div>
+        <span class="btn btn-dash">+ Todo 추가</span>
+        <p class="note">PJT 드롭박스: 동일 구분 내 '미진행·진행중' PJT만 선택 가능</p>
+      </div>
+      <div class="row" style="border-top:1px solid var(--bd);padding-top:14px;">
+        <span class="btn" style="color:var(--red);border-color:var(--red-bg);">삭제</span>
+        <span>
+          <span class="btn">배포 완료</span>
+          <span class="btn btn-p">저장</span>
+        </span>
+      </div>
+      <p class="note" style="text-align:right;">미배포 상태: '배포 완료' / 배포됨 상태: '미배포로 되돌리기' · 삭제 시 하위 Todo·메모 연쇄 삭제 + 확인창</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7. PJT 등록/편집 팝업 ============ -->
+<section>
+  <h2>7. PJT 등록/편집 팝업 <small>구분·태그 옆 ⚙ = 인라인 관리 팝업 (우측)</small></h2>
+  <div class="frame overlay">
+    <div class="modal" style="max-width:340px;">
+      <p style="font-size:15px;font-weight:600;margin:0 0 14px;">새 프로젝트</p>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">PJT명</p>
+      <input class="input" style="width:100%;margin-bottom:10px;" value="예: 원가 개선 PJT">
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">기초 사항</p>
+      <div style="border:1px solid var(--bds);border-radius:8px;padding:8px 10px;height:52px;font-size:12px;color:var(--t3);margin-bottom:10px;">자유 텍스트…</div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">구분 (필수, 1개)</p>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <span class="input" style="flex:1;color:var(--t1);">유맥 ▾</span><span class="btn">⚙</span>
+      </div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">태그 (선택, 복수)</p>
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:flex-start;">
+        <div style="flex:1;border:1px solid var(--bds);border-radius:8px;padding:6px 8px;display:flex;gap:4px;flex-wrap:wrap;">
+          <span class="badge b-blue" style="border-radius:999px;">Biz 성과관리 ✕</span>
+          <span class="badge b-blue" style="border-radius:999px;">Biz 전략기획 ✕</span>
+          <span class="tiny muted">+ 선택</span>
+        </div>
+        <span class="btn" style="border-color:var(--blue);color:var(--blue);">⚙</span>
+      </div>
+      <p class="small" style="color:var(--t2);margin:0 0 4px;">멤버</p>
+      <div style="border:1px solid var(--bds);border-radius:8px;padding:6px 8px;display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
+        <span class="chip">김OO ✕</span><span class="chip">박OO ✕</span><span class="small muted">+ 추가</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div><p class="small" style="color:var(--t2);margin:0 0 4px;">시작일</p><input class="input" style="width:100%;color:var(--t1);" value="2026.07.17"></div>
+        <div><p class="small" style="color:var(--t2);margin:0 0 4px;">완료 예정일</p><input class="input" style="width:100%;" value="선택"></div>
+      </div>
+      <div class="row" style="border-top:1px solid var(--bd);padding-top:12px;">
+        <span class="btn" style="color:var(--red);border-color:var(--red-bg);">삭제 <span class="tiny">(편집 시)</span></span>
+        <span><span class="btn">취소</span> <span class="btn btn-p">저장</span></span>
+      </div>
+      <p class="note">저장 시 상태=미진행, "기타" Task 자동 생성(배포됨)</p>
+    </div>
+    <div class="modal" style="max-width:230px;box-shadow:0 8px 24px rgba(0,0,0,.15);">
+      <p style="font-size:13px;font-weight:600;margin:0 0 10px;">태그 관리</p>
+      <div class="small">
+        <p class="row" style="margin:0 0 6px;">Biz 성과관리 <span class="muted">✎ 🗑</span></p>
+        <p class="row" style="margin:0 0 6px;">Biz 조직운영 <span class="muted">✎ 🗑</span></p>
+        <p class="row" style="margin:0 0 6px;">Biz 정기회의 <span class="muted">✎ 🗑</span></p>
+        <p class="row" style="margin:0 0 10px;">Life 학습 <span class="muted">✎ 🗑</span></p>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <input class="input" style="flex:1;" value="새 태그명"><span class="btn">추가</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
