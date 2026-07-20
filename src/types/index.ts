@@ -32,6 +32,7 @@ export interface Project {
   start_date: string | null
   due_date: string | null
   completed_at: string | null
+  sidebar_sort?: number | null // 사이드바 구분 내 정렬 (migrations/004)
   divisions?: Division
   project_tags?: { tags: Tag }[]
   project_members?: { people: Person }[]

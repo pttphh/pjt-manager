@@ -19,6 +19,8 @@ export default function Sidebar() {
   })
   const [divisions, setDivisions] = useState<Division[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [dragId, setDragId] = useState<string | null>(null) // 드래그 중인 PJT
+  const [dropId, setDropId] = useState<string | null>(null) // 위에 올라간 대상 PJT
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}')
@@ -43,11 +45,8 @@ export default function Sidebar() {
     // '구분'은 항상 사이드바에 떠 있어야 하므로 서로의 실패에 영향받지 않게 한다.
     const [divRes, pjtRes] = await Promise.allSettled([
       supabase.from('divisions').select('*').order('sort_order'),
-      supabase
-        .from('projects')
-        .select('id, name, division_id, status')
-        .neq('status', 'done')
-        .order('name'),
+      // select('*') 로 받아 migrations/004(sidebar_sort) 미적용이어도 깨지지 않게 한다.
+      supabase.from('projects').select('*').neq('status', 'done'),
     ])
     if (divRes.status === 'fulfilled') {
       setDivisions((divRes.value.data as Division[]) ?? [])
@@ -67,6 +66,55 @@ export default function Sidebar() {
       localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next))
       return next
     })
+  }
+
+  // 구분 내 PJT 목록 (사이드바 정렬값 → 이름 순)
+  const pjtsOf = (divId: string) =>
+    projects
+      .filter((p) => p.division_id === divId)
+      .sort(
+        (a, b) =>
+          (a.sidebar_sort ?? 0) - (b.sidebar_sort ?? 0) || a.name.localeCompare(b.name, 'ko'),
+      )
+
+  // ---- 드래그 정렬 (같은 구분 내에서만) ----
+  async function handleDrop(divId: string, targetId: string) {
+    const from = dragId
+    setDragId(null)
+    setDropId(null)
+    if (!from || from === targetId) return
+    // 대상이 같은 구분인지 확인
+    const target = projects.find((p) => p.id === targetId)
+    const moving = projects.find((p) => p.id === from)
+    if (!target || !moving || target.division_id !== divId || moving.division_id !== divId) return
+
+    const ordered = pjtsOf(divId)
+    const fromIdx = ordered.findIndex((p) => p.id === from)
+    const toIdx = ordered.findIndex((p) => p.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const arr = [...ordered]
+    const [m] = arr.splice(fromIdx, 1)
+    arr.splice(toIdx, 0, m)
+
+    // 로컬 상태에 sidebar_sort 재부여 (즉시 반영)
+    const rank = new Map(arr.map((p, i) => [p.id, i]))
+    setProjects((prev) =>
+      prev.map((p) => (rank.has(p.id) ? { ...p, sidebar_sort: rank.get(p.id)! } : p)),
+    )
+
+    // DB 저장
+    try {
+      const results = await Promise.all(
+        arr.map((p, i) => supabase.from('projects').update({ sidebar_sort: i }).eq('id', p.id)),
+      )
+      const err = results.find((r) => r.error)?.error as { code?: string; message?: string } | undefined
+      if (err && (err.code === '42703' || err.code === 'PGRST204' || /sidebar_sort/.test(err.message ?? ''))) {
+        alert('정렬 순서를 저장하지 못했습니다.\nmigrations/004-sidebar-sort.sql 을 적용하세요.')
+        void loadTree()
+      }
+    } catch (e) {
+      console.error('[Sidebar] 정렬 저장 실패', e)
+    }
   }
 
   // ---- 드래그 리사이즈 ----
@@ -123,7 +171,7 @@ export default function Sidebar() {
         </div>
         <nav className="flex flex-col gap-px px-2.5 pb-3.5">
           {divisions.map((div) => {
-            const pjts = projects.filter((p) => p.division_id === div.id)
+            const pjts = pjtsOf(div.id)
             const open = !collapsed[div.id]
             return (
               <div key={div.id}>
@@ -142,9 +190,30 @@ export default function Sidebar() {
                     {pjts.map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => navigate(`/project/${p.id}`)}
+                        draggable
+                        onDragStart={() => setDragId(p.id)}
+                        onDragEnd={() => {
+                          setDragId(null)
+                          setDropId(null)
+                        }}
+                        onDragOver={(e) => {
+                          if (dragId && dragId !== p.id) {
+                            e.preventDefault()
+                            if (dropId !== p.id) setDropId(p.id)
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          void handleDrop(div.id, p.id)
+                        }}
+                        onClick={() => {
+                          if (!dragId) navigate(`/project/${p.id}`)
+                        }}
+                        title="클릭: 세부화면 · 드래그: 순서 변경"
                         className={`flex items-center gap-1.5 rounded-md py-[5px] pl-6 pr-[9px] text-left text-[12.5px] hover:bg-hover-bg hover:text-primary ${
                           activePjtId === p.id ? 'bg-hover-bg font-semibold text-primary' : 'text-ink-1'
+                        } ${dragId === p.id ? 'opacity-40' : ''} ${
+                          dropId === p.id && dragId !== p.id ? 'border-t-2 border-primary' : 'border-t-2 border-transparent'
                         }`}
                       >
                         <span className="h-1 w-1 flex-shrink-0 rounded-[1px] bg-ink-4" />
