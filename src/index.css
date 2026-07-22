@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* 앱 전체 배율 — 이 값 하나로 전체 글자·간격을 키운다 (PC 전용) */
+    --app-zoom: 1.15;
+  }
   html,
   body,
   #root {
@@ -15,7 +19,17 @@
     -webkit-font-smoothing: antialiased;
     background: #ffffff;
   }
+  #root {
+    zoom: var(--app-zoom);
+  }
   ::selection {
     background: #e6f1fb;
+  }
+}
+
+@layer utilities {
+  /* zoom 배율만큼 전체 높이를 보정해 100vh 컨테이너가 화면을 넘지 않게 한다 */
+  .h-app {
+    height: calc(100vh / var(--app-zoom));
   }
 }

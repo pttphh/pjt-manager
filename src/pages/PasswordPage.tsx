@@ -21,7 +21,7 @@ export default function PasswordPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-[#EDEBE6]">
+    <div className="flex h-app items-center justify-center bg-[#EDEBE6]">
       <form
         onSubmit={submit}
         className="flex w-[320px] flex-col items-center gap-3 rounded-xl border border-line bg-white px-8 py-12"
