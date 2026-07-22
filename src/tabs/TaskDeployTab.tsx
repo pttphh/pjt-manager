@@ -7,6 +7,7 @@ interface DeployTodo {
   title: string
   status: TodoStatus
   sort_order: number
+  assignees: string[]
 }
 interface DeployTask {
   id: string
@@ -14,6 +15,7 @@ interface DeployTask {
   task_date: string
   decisions: string | null
   projectName: string
+  members: string[]
   todos: DeployTodo[]
 }
 interface RawDeploy {
@@ -22,7 +24,16 @@ interface RawDeploy {
   task_date: string
   decisions: string | null
   projects: { name: string } | null
-  todos: { id: string; title: string; status: TodoStatus; sort_order: number }[] | null
+  task_members: { people: { name: string } | null }[] | null
+  todos:
+    | {
+        id: string
+        title: string
+        status: TodoStatus
+        sort_order: number
+        todo_assignees: { people: { name: string } | null }[] | null
+      }[]
+    | null
 }
 
 // 'YYYY-MM-DD...' → 'M/D'
@@ -36,6 +47,14 @@ const STATUS_LABEL: Record<Exclude<TodoStatus, 'draft'>, string> = {
   published: '배포됨',
   checked: '체크',
   done: '완료',
+}
+
+const SEC_LABEL: React.CSSProperties = {
+  fontSize: '10.5px',
+  fontWeight: 700,
+  letterSpacing: '0.03em',
+  color: '#8A877F',
+  marginBottom: 3,
 }
 
 /**
@@ -57,7 +76,9 @@ export default function TaskDeployTab() {
     try {
       const { data } = await supabase
         .from('tasks')
-        .select('id, title, task_date, decisions, projects(name), todos(id, title, status, sort_order)')
+        .select(
+          'id, title, task_date, decisions, projects(name), task_members(people(name)), todos(id, title, status, sort_order, todo_assignees(people(name)))',
+        )
       const rows: DeployTask[] = (((data as unknown as RawDeploy[]) ?? []) as RawDeploy[])
         .map((t) => ({
           id: t.id,
@@ -65,7 +86,17 @@ export default function TaskDeployTab() {
           task_date: t.task_date,
           decisions: t.decisions,
           projectName: t.projects?.name ?? '(프로젝트 없음)',
-          todos: (t.todos ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
+          members: (t.task_members ?? []).map((m) => m.people?.name).filter(Boolean) as string[],
+          todos: (t.todos ?? [])
+            .slice()
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((td) => ({
+              id: td.id,
+              title: td.title,
+              status: td.status,
+              sort_order: td.sort_order,
+              assignees: (td.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
+            })),
         }))
         // 미배포(draft) 또는 배포됨(published) Todo가 있는 Task 표시.
         // 배포해도 회색으로 남아 되돌리기 가능하며, 모든 Todo가 체크/완료로 넘어가야 사라짐.
@@ -206,25 +237,32 @@ export default function TaskDeployTab() {
                     </span>
                   </div>
 
-                  {/* 지시사항 미리보기 */}
-                  {t.decisions && (
-                    <div
-                      className="truncate"
-                      style={{
-                        padding: '7px 13px',
-                        fontSize: '11.5px',
-                        color: '#8A877F',
-                        borderBottom: '1px solid #F0EFEC',
-                        background: '#fff',
-                      }}
-                      title={t.decisions}
-                    >
-                      {t.decisions}
+                  {/* 멤버 */}
+                  <div style={{ background: '#fff', padding: '9px 13px 0' }}>
+                    <div style={SEC_LABEL}>멤버</div>
+                    <div style={{ fontSize: '12px', color: t.members.length ? '#55534E' : '#B4B1A9' }}>
+                      {t.members.length ? t.members.join(', ') : '—'}
                     </div>
-                  )}
+                  </div>
+
+                  {/* 지시 & 전달 사항 */}
+                  <div style={{ background: '#fff', padding: '9px 13px 0' }}>
+                    <div style={SEC_LABEL}>지시 &amp; 전달 사항</div>
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: t.decisions ? '#55534E' : '#B4B1A9',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {t.decisions || '—'}
+                    </div>
+                  </div>
 
                   {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
-                  <div style={{ background: '#fff', padding: '4px 13px 10px' }}>
+                  <div style={{ background: '#fff', padding: '9px 13px 10px' }}>
+                    <div style={SEC_LABEL}>Todo</div>
                     {t.todos.map((td) => {
                       const isDraft = td.status === 'draft'
                       return (
@@ -251,6 +289,11 @@ export default function TaskDeployTab() {
                               </span>
                             )}
                             {td.title}
+                            {td.assignees.length > 0 && (
+                              <span style={{ fontSize: '10.5px', color: isDraft ? '#8A877F' : '#B4B1A9', marginLeft: 6 }}>
+                                — {td.assignees.join(', ')}
+                              </span>
+                            )}
                           </span>
                           {isDraft ? (
                             <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTodo(td.id)}>
