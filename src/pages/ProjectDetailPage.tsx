@@ -80,7 +80,7 @@ export default function ProjectDetailPage() {
         supabase
           .from('projects')
           .select(
-            '*, divisions(id,name), project_tags(tags(id,name,sort_order)), project_members(people(id,name))',
+            '*, divisions(id,name), project_tags(tags(id,name,sort_order,color_bg,color_fg,color_bd)), project_members(people(id,name))',
           )
           .eq('id', id)
           .single(),

@@ -17,5 +17,8 @@ export const TAG_SWATCHES: Swatch[] = [
 ]
 
 export function tagSwatch(index: number): Swatch {
-  return TAG_SWATCHES[index % TAG_SWATCHES.length]
+  // 음수·NaN 인덱스에도 안전한 순환 (JS의 %는 음수를 음수로 반환하므로 보정)
+  const n = TAG_SWATCHES.length
+  const i = Number.isFinite(index) ? ((Math.trunc(index) % n) + n) % n : 0
+  return TAG_SWATCHES[i]
 }
