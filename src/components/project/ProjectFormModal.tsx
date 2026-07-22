@@ -25,6 +25,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [links, setLinks] = useState<string[]>([])
+  const [urgent, setUrgent] = useState(false)
+  const [important, setImportant] = useState(false)
   const [divisionId, setDivisionId] = useState('')
   const [tagIds, setTagIds] = useState<string[]>([])
   const [members, setMembers] = useState<Person[]>([])
@@ -55,6 +57,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
     setName('')
     setDescription('')
     setLinks([])
+    setUrgent(false)
+    setImportant(false)
     setTagIds([])
     setMembers([])
     setStartDate('')
@@ -73,6 +77,8 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
     setLinks(
       (data.link_urls && data.link_urls.length ? data.link_urls : data.link_url ? [data.link_url] : []) as string[],
     )
+    setUrgent(!!data.is_urgent)
+    setImportant(!!data.is_important)
     setDivisionId(data.division_id ?? '')
     setStartDate(data.start_date ?? '')
     setDueDate(data.due_date ?? '')
@@ -101,13 +107,13 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
         due_date: dueDate || null,
       }
       const cleanLinks = links.map((l) => l.trim()).filter(Boolean)
-      const withLink = { ...base, link_urls: cleanLinks }
-      // migrations/006 미적용(link_urls 컬럼 없음) 시에도 저장이 깨지지 않도록 폴백.
-      // 읽기는 42703, 쓰기는 PGRST204(schema cache에 컬럼 없음)로 서로 다른 코드가 온다.
+      const withLink = { ...base, link_urls: cleanLinks, is_urgent: urgent, is_important: important }
+      // migrations/006·007 미적용(추가 컬럼 없음) 시에도 저장이 깨지지 않도록 폴백.
+      // 읽기는 42703, 쓰기는 PGRST204(schema cache에 컬럼 없음)로 서로 다른 코드가 온다 (컬럼 무관하게 감지).
       const missingCol = (e: { code?: string; message?: string } | null) =>
-        !!e && (e.code === '42703' || e.code === 'PGRST204' || /link_url/i.test(e.message ?? ''))
+        !!e && (e.code === '42703' || e.code === 'PGRST204')
       const warnMigration = () =>
-        alert('링크는 저장되지 않았습니다.\nmigrations/006-project-links-multi.sql 을 적용하세요.')
+        alert('링크·긴급/중요 등 일부 항목이 저장되지 않았습니다.\n최신 마이그레이션(006·007)을 적용하세요.')
 
       if (isEdit) {
         let { error } = await supabase.from('projects').update(withLink).eq('id', projectId)
@@ -183,8 +189,20 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="예: 원가 개선 PJT"
-        className={`${inputCls} mb-2.5`}
+        className={`${inputCls} mb-2`}
       />
+
+      <div className="mb-2.5 flex items-center gap-4">
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-1">
+          <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
+          🚨 긴급
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-1">
+          <input type="checkbox" checked={important} onChange={(e) => setImportant(e.target.checked)} />
+          💡 중요
+        </label>
+        {urgent && important && <span className="text-[11px] text-ink-3">→ ⭐ 로 표시</span>}
+      </div>
 
       <div className={labelCls}>기초 사항</div>
       <textarea

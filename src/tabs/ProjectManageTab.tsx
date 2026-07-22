@@ -14,6 +14,8 @@ interface PjtRow {
   name: string
   status: ProjectStatus
   division_id: string
+  urgent: boolean
+  important: boolean
   tags: TagLink[]
   sort: number // '태그 없음' 컬럼용 정렬값
 }
@@ -23,6 +25,8 @@ interface RawProject {
   status: ProjectStatus
   division_id: string
   sort_order: number | null
+  is_urgent?: boolean | null
+  is_important?: boolean | null
   project_tags: { tag_id: string; sort_order: number | null }[] | null
 }
 
@@ -31,8 +35,16 @@ const ALL_STATUSES: ProjectStatus[] = ['pending', 'active', 'hold', 'done']
 const DEFAULT_STATUSES: ProjectStatus[] = ['pending', 'active', 'hold']
 const LONG_PRESS = 170
 
-// 컬럼 고정 폭: 화면에 5.5개만 보이고 나머지는 가로 스크롤 (gap 14px × ~5 = 70px 보정)
-const COL_STYLE = { flex: '0 0 calc((100% - 70px) / 5.5)' } as const
+// 컬럼 고정 폭: 화면에 ~4개만 보이고 나머지는 가로 스크롤 (gap 14px × 3 = 42px 보정)
+const COL_STYLE = { flex: '0 0 calc((100% - 42px) / 4)' } as const
+
+// 긴급/중요 아이콘: 긴급=🚨, 중요=💡, 둘 다=⭐
+function priorityIcon(urgent: boolean, important: boolean): string {
+  if (urgent && important) return '⭐'
+  if (urgent) return '🚨'
+  if (important) return '💡'
+  return ''
+}
 
 function tagColor(tag: Tag, index: number) {
   if (tag.color_bg && tag.color_fg && tag.color_bd) {
@@ -78,9 +90,8 @@ export default function ProjectManageTab() {
       const [tagRes, pjtRes] = await Promise.all([
         supabase.from('tags').select('*').order('sort_order'),
         // 완료 PJT도 필터로 볼 수 있어야 하므로 전체 상태를 불러온다 (표시는 statusFilter로 제어)
-        supabase
-          .from('projects')
-          .select('id, name, status, division_id, sort_order, project_tags(tag_id, sort_order)'),
+        // select('*') 로 받아 migration 007(is_urgent/is_important) 미적용이어도 깨지지 않게 한다.
+        supabase.from('projects').select('*, project_tags(tag_id, sort_order)'),
       ])
       setTags((tagRes.data as Tag[]) ?? [])
       if (pjtRes.error) {
@@ -100,6 +111,8 @@ export default function ProjectManageTab() {
             name: p.name,
             status: p.status,
             division_id: p.division_id,
+            urgent: !!p.is_urgent,
+            important: !!p.is_important,
             sort: p.sort_order ?? 0,
             tags: (p.project_tags ?? []).map((t) => ({ tagId: t.tag_id, sort: t.sort_order ?? 0 })),
           })),
@@ -300,6 +313,10 @@ export default function ProjectManageTab() {
         }}
         className="cursor-grab select-none rounded-lg border px-[11px] py-2.5 text-left text-[13px] font-medium leading-[1.4] transition hover:brightness-[0.97] active:cursor-grabbing"
       >
+        {(() => {
+          const icon = priorityIcon(pjt.urgent, pjt.important)
+          return icon ? <span className="mr-1">{icon}</span> : null
+        })()}
         {pjt.name}
       </button>
     )

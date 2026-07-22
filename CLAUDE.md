@@ -59,6 +59,7 @@ export interface Person { id: string; name: string }
 export interface Project {
   id: string; name: string; description: string | null
   link_urls?: string[] | null         // 관련 온라인 주소 여러 개 (migrations/006), 세부화면 상단에서 각각 새 창으로 열림 (구 단일 link_url=003)
+  is_urgent?: boolean; is_important?: boolean  // 긴급/중요 (migrations/007). PJT 관리 카드 이름 앞 아이콘: 긴급🚨 중요💡 둘다⭐
   division_id: string; status: ProjectStatus
   start_date: string | null; due_date: string | null; completed_at: string | null
   divisions?: Division
@@ -85,7 +86,7 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 4. **메모는 누적 저장**(todo_memos insert), 화면에는 최신 1건만 표시. 날짜만 표기(시각 없음).
 5. **TaskModal은 단일 창**: 신규 등록·기존 Task 클릭 전부 동일 컴포넌트. 필드: Task명 / 날짜(기본 작성일) / 멤버(기본=PJT 멤버 전원) / 결정&전달사항 / Todo 행(내용·담당자·PJT·삭제). 담당자 = Task 멤버 중 체크박스 복수 선택. Todo 상태는 이 창에 표기하지 않고 변경 불가. **새로 추가되는 Todo는 항상 draft로 생성**(기존 Todo 상태는 건드리지 않음). 하단: 저장 + 삭제(확인창, 기타 Task는 삭제 불가)만 — **배포 버튼 없음**(배포는 배포 탭에서 Todo 단위/Task 일괄 처리).
 6. **배포 탭**: draft **또는** published Todo가 있는 Task 묶음 표시(배포해도 회색으로 남아 되돌리기 가능, **모든 Todo가 checked/done으로 넘어가야 사라짐**). 묶음 = 헤더 `Task명 (작성 M/D) — 프로젝트명`(draft 있으면 주황+'이 Task 전체 배포', 전부 배포됐으면 회색+'배포됨 n건·되돌리기 가능') + 지시사항(decisions) 미리보기 + 전체 Todo 목록(draft=정상+'배포', published=회색+'미배포로 되돌리기', checked/done=회색 표시만). 배포 시 `deployed_at=now()`, 되돌리기 시 null. PJT 세부 Tasks 목록 표기는 `YY.MM.DD Task명`.
-7. **PJT 관리 탭**: 태그별 컬럼, PJT명 카드만. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
+7. **PJT 관리 탭**: 태그별 컬럼(고정폭 ~4개 노출, 나머지 가로 스크롤), PJT명 카드. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 카드 이름 앞에 우선순위 아이콘(긴급🚨/중요💡/둘다⭐). 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
 8. **PJT 등록 시 "기타" Task 자동 생성**: is_misc=true. 특별 취급 없음 — 기타 Task의 Todo도 draft로 생성되어 같은 배포 절차를 탄다(단, 기타 Task 자체는 삭제 불가).
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
 10. **삭제**: PJT·Task 모두 삭제 가능, cascade(스키마에 정의됨), 반드시 확인창.

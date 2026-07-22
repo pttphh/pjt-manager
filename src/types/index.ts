@@ -28,6 +28,8 @@ export interface Project {
   /** 관련 온라인 주소 (migrations/003=단일 link_url, 006=배열 link_urls). 세부화면 상단에서 새 창으로 열림 */
   link_url?: string | null
   link_urls?: string[] | null
+  is_urgent?: boolean | null // 긴급 (migrations/007)
+  is_important?: boolean | null // 중요 (migrations/007)
   division_id: string
   status: ProjectStatus
   start_date: string | null

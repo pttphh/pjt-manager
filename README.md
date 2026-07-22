@@ -29,6 +29,7 @@ VITE_APP_PASSWORD=        # 입장 비밀번호(단일)
 4. `migrations/003-project-link.sql` — PJT 링크 컬럼
 5. `migrations/004-sidebar-sort.sql` — 사이드바 PJT 정렬 컬럼
 6. `migrations/006-project-links-multi.sql` — PJT 링크 여러 개(link_urls 배열)
+7. `migrations/007-project-priority.sql` — PJT 긴급/중요 플래그
 
 > 기존 DB(구 스키마)를 쓰고 있다면 `migrations/005-todo-level-deploy.sql`도 실행
 > (Task 단위 배포 → Todo 단위 배포 전환. 새 설치는 불필요 — schema-v2.sql에 이미 반영됨)
