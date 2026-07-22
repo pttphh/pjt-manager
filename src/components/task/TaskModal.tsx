@@ -3,7 +3,7 @@ import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import TagInput from '../ui/TagInput'
 import { supabase } from '../../lib/supabase'
-import type { Person, TaskStatus } from '../../types'
+import type { Person } from '../../types'
 
 interface TaskModalProps {
   open: boolean
@@ -45,7 +45,6 @@ export default function TaskModal({
   const [decisions, setDecisions] = useState('')
   const [members, setMembers] = useState<Person[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
-  const [status, setStatus] = useState<TaskStatus>('draft')
   const [isMisc, setIsMisc] = useState(false)
   const [pjtOptions, setPjtOptions] = useState<PjtOpt[]>([])
   const [assigneeOpen, setAssigneeOpen] = useState<string | null>(null)
@@ -82,7 +81,6 @@ export default function TaskModal({
         setTitle(data.title ?? '')
         setTaskDate(data.task_date ?? todayStr())
         setDecisions(data.decisions ?? '')
-        setStatus(data.status)
         setIsMisc(!!data.is_misc)
         setMembers(
           (data.task_members ?? []).map((m: { people: Person }) => m.people).filter(Boolean),
@@ -104,7 +102,6 @@ export default function TaskModal({
       setTitle('')
       setTaskDate(todayStr())
       setDecisions('')
-      setStatus('draft')
       setIsMisc(false)
       const { data: pm } = await supabase
         .from('project_members')
@@ -138,7 +135,7 @@ export default function TaskModal({
       ),
     )
 
-  async function persist(newStatus: TaskStatus) {
+  async function persist() {
     if (!title.trim()) {
       alert('Task명을 입력하세요.')
       return
@@ -146,13 +143,12 @@ export default function TaskModal({
     setSaving(true)
     try {
       let tid = taskId as string | undefined
+      // Task는 배포 상태를 갖지 않는다 (배포는 배포 탭에서 Todo 단위로 처리)
       const payload = {
         project_id: projectId,
         title: title.trim(),
         task_date: taskDate,
         decisions: decisions.trim() || null,
-        status: newStatus,
-        deployed_at: newStatus === 'published' ? new Date().toISOString() : null,
       }
       if (isEdit) {
         await supabase.from('tasks').update(payload).eq('id', taskId)
@@ -194,7 +190,7 @@ export default function TaskModal({
           if (!t.title.trim()) continue
           const { data: nt } = await supabase
             .from('todos')
-            .insert({ task_id: tid, project_id: t.projectId, title: t.title.trim(), status: 'pending', sort_order: i })
+            .insert({ task_id: tid, project_id: t.projectId, title: t.title.trim(), status: 'draft', sort_order: i })
             .select()
             .single()
           if (nt && asg.length)
@@ -332,27 +328,20 @@ export default function TaskModal({
       </div>
 
       <div className="flex items-center justify-between border-t border-line pt-3.5">
-        {/* "기타" 상설 Task는 삭제 불가 (규칙 8) */}
+        {/* "기타" 상설 Task는 삭제 불가 */}
         {isEdit && !isMisc ? (
           <Button variant="danger" onClick={del}>
             삭제
           </Button>
         ) : isMisc ? (
-          <span className="text-[10px] text-ink-3">상설 Task(기타)는 항상 배포 상태이며 삭제할 수 없습니다.</span>
+          <span className="text-[10px] text-ink-3">상설 Task(기타)는 삭제할 수 없습니다.</span>
         ) : (
           <span />
         )}
-        <div className="flex gap-2">
-          {/* "기타"는 배포 토글 없음 (항상 published 유지) */}
-          {!isMisc && (
-            <Button onClick={() => persist(status === 'draft' ? 'published' : 'draft')} disabled={saving}>
-              {status === 'draft' ? '배포 완료' : '미배포로 되돌리기'}
-            </Button>
-          )}
-          <Button variant="primary" onClick={() => persist(status)} disabled={saving}>
-            저장
-          </Button>
-        </div>
+        {/* 배포는 배포 탭에서 Todo 단위/Task 일괄로 처리 */}
+        <Button variant="primary" onClick={() => void persist()} disabled={saving}>
+          저장
+        </Button>
       </div>
     </Modal>
   )

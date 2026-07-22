@@ -23,10 +23,14 @@ VITE_APP_PASSWORD=        # 입장 비밀번호(단일)
 
 ## DB 준비 (Supabase SQL Editor에서 순서대로 실행)
 
-1. `schema-v2.sql` — 테이블 생성 + 기본 시드
+1. `schema-v2.sql` — 테이블 생성 + 기본 시드 (Todo 단위 배포 모델 반영됨)
 2. `fix-rls-and-seed.sql` — RLS 비활성화 + anon 권한 + 시드(재실행 안전)
 3. `migrations/002-tag-color-and-sort.sql` — 태그 색상·정렬 컬럼
 4. `migrations/003-project-link.sql` — PJT 링크 컬럼
+5. `migrations/004-sidebar-sort.sql` — 사이드바 PJT 정렬 컬럼
+
+> 기존 DB(구 스키마)를 쓰고 있다면 `migrations/005-todo-level-deploy.sql`도 실행
+> (Task 단위 배포 → Todo 단위 배포 전환. 새 설치는 불필요 — schema-v2.sql에 이미 반영됨)
 
 ## 배포 (Vercel)
 

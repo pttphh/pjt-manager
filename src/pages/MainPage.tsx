@@ -10,7 +10,7 @@ type TabKey = 'todo' | 'deploy' | 'pjt'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'todo', label: 'Todo 체크' },
-  { key: 'deploy', label: 'Tasks 배포' },
+  { key: 'deploy', label: '배포' },
   { key: 'pjt', label: 'PJT 관리' },
 ]
 

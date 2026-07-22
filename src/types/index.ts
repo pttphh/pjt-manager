@@ -1,6 +1,6 @@
 export type ProjectStatus = 'pending' | 'active' | 'hold' | 'done'
-export type TaskStatus = 'draft' | 'published'
-export type TodoStatus = 'pending' | 'checked' | 'done'
+// 배포는 Todo 단위: draft(미배포) → published(배포/미진행) → checked(체크) → done(완료)
+export type TodoStatus = 'draft' | 'published' | 'checked' | 'done'
 
 export interface Division {
   id: string
@@ -44,9 +44,7 @@ export interface Task {
   title: string
   task_date: string
   decisions: string | null
-  status: TaskStatus
   is_misc: boolean
-  deployed_at: string | null
   projects?: Project
   task_members?: { people: Person }[]
   todos?: Todo[]
@@ -58,6 +56,7 @@ export interface Todo {
   project_id: string
   title: string
   status: TodoStatus
+  deployed_at?: string | null // 배포 시각 (미배포 복귀 시 null)
   sort_order: number
   todo_assignees?: { people: Person }[]
   todo_memos?: TodoMemo[]

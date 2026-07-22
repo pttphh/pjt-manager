@@ -4,7 +4,7 @@
 상세 요구사항은 `prd-v2.md`, DB는 `schema-v2.sql` 참조 (둘 다 프로젝트 루트에 있음).
 
 ## 한 줄 정의
-경영자와 소수 팀원용 PC 전용 업무 관리 웹앱. PJT → Tasks → Todo 3계층, Task 배포 → Todo 진행 체크 흐름.
+경영자와 소수 팀원용 PC 전용 업무 관리 웹앱. PJT → Tasks → Todo 3계층, **Todo 단위 배포**(draft→published) → 진행 체크(checked→done) 흐름.
 
 ## 기술 스택
 Vite + React 18 + TypeScript + Tailwind CSS v3 / Supabase (anon key, RLS 없음) / React Router v6 / Vercel
@@ -24,7 +24,7 @@ VITE_APP_PASSWORD=
 ## 라우팅
 ```
 /              PasswordPage
-/main          MainPage (Layout, 3탭: Todo체크 | Tasks배포 | PJT관리)
+/main          MainPage (Layout, 3탭: Todo체크 | 배포 | PJT관리)
 /project/:id   ProjectDetailPage (Layout)
 /settings      SettingsPage (Layout, 3탭: 구분 | 태그 | 멤버 — 목록·수정·삭제·추가. 비밀번호 변경 없음)
 ```
@@ -49,8 +49,8 @@ src/
 ## 핵심 타입
 ```ts
 export type ProjectStatus = 'pending' | 'active' | 'hold' | 'done'
-export type TaskStatus = 'draft' | 'published'
-export type TodoStatus = 'pending' | 'checked' | 'done'
+// 배포는 Todo 단위: draft(미배포) → published(배포/미진행) → checked(체크) → done(완료)
+export type TodoStatus = 'draft' | 'published' | 'checked' | 'done'
 
 export interface Division { id: string; name: string; sort_order: number }
 export interface Tag { id: string; name: string; sort_order: number }
@@ -67,13 +67,12 @@ export interface Project {
 }
 export interface Task {
   id: string; project_id: string; title: string; task_date: string
-  decisions: string | null; status: TaskStatus; is_misc: boolean
-  deployed_at: string | null
+  decisions: string | null; is_misc: boolean   // 배포 상태 없음 (Todo 단위 배포)
   projects?: Project; task_members?: { people: Person }[]; todos?: Todo[]
 }
 export interface Todo {
   id: string; task_id: string; project_id: string; title: string
-  status: TodoStatus; sort_order: number
+  status: TodoStatus; deployed_at?: string | null; sort_order: number
   todo_assignees?: { people: Person }[]; todo_memos?: TodoMemo[]
 }
 export interface TodoMemo { id: string; todo_id: string; content: string; created_at: string }
@@ -81,13 +80,13 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 
 ## 반드시 지킬 도메인 규칙
 1. **Todo의 project_id ≠ task의 project_id 가능.** 기본값은 Task의 PJT. 변경 허용 범위 = 동일 구분 + status가 pending/active인 PJT만.
-2. **Todo 체크 탭**: 배포 여부와 무관하게 **전체 Task의 Todo 표시**(미배포 Task 포함). 각 Todo 앞에 **단일 상태 뱃지** 표기: 미배포(주황) → 배포(초록) → 체크(파랑). 체크되면 배포/미배포 뱃지가 '체크'로 교체(2개 병행 아님). 상단에 구분 필터 칩(Todo의 project_id → division 기준) + **묶음 토글(Tasks/담당자)**. 묶음=Tasks면 Task 단위 아코디언(메타 `담당: …`), 묶음=담당자면 사람 단위 아코디언(메타 `PJT: …`). 미진행 구간과 체크됨 구간 두 구간(각 구간엔 해당 상태 Todo만, 한 그룹이 양 구간 동시 노출 가능). 미진행 Todo는 '저장 & 체크' → status 'checked' + 하단 이동(**메모는 선택, 비어 있어도 체크 가능**; 배포/미배포 무관). 체크됨 Todo는 최신 메모(날짜만) 표시 + **'체크 해제'(→ 'pending', 미진행 복귀, 메모 이력 유지)** / **'완료로 변경'(→ 'done', 화면 제거)** 두 버튼. Task의 전 Todo가 done이면 그룹도 제거.
+2. **Todo 체크 탭**: `todos.status in ('published','checked')`인 Todo만 표시 — draft 미노출, done 제거. 각 Todo 앞 **단일 상태 뱃지**: 배포(초록)=published → 체크(파랑)=checked. 상단에 구분 필터 칩(Todo의 project_id → division 기준) + **묶음 토글(Tasks/담당자)**. 묶음=Tasks면 Task 단위 아코디언(메타 `담당: …`), 묶음=담당자면 사람 단위 아코디언(메타 `PJT: …`, 담당자 없으면 '미지정' 그룹). 미진행(published) 구간과 체크됨(checked) 구간 두 구간(한 그룹이 양 구간 동시 노출 가능). 미진행 Todo는 '저장 & 체크' → 'checked' + 하단 이동(**메모는 선택, 비어 있어도 체크 가능**). 체크됨 Todo는 최신 메모(날짜만) 표시 + **'체크 해제'(→ 'published' 복귀, 메모 이력 유지)** / **'완료로 변경'(→ 'done', 화면 제거)** 두 버튼. Task의 전 Todo가 done이면 그룹도 제거.
 3. **PJT 세부화면 Todo 목록**: project_id 매칭 기준, 미배포 Task의 Todo 포함 전체. 체크박스 자유 체크/해제. 체크→'done'. 해제→메모 있으면 'checked', 없으면 'pending'.
 4. **메모는 누적 저장**(todo_memos insert), 화면에는 최신 1건만 표시. 날짜만 표기(시각 없음).
-5. **TaskModal은 단일 창**: 신규 등록·기존 Task 클릭·배포 탭 '내용보기' 전부 동일 컴포넌트. 필드: Task명 / 날짜(기본 작성일) / 멤버(기본=PJT 멤버 전원) / 결정&전달사항 / Todo 행(내용·담당자·PJT·삭제). 담당자 = Task 멤버 중 체크박스 복수 선택. Todo 상태는 이 창에 표기하지 않고 변경 불가. 하단: 저장 + (draft이면 '배포 완료' / published이면 '미배포로 되돌리기') + 삭제(확인창).
-6. **행 표기 규칙**: Tasks 배포 탭 `Task명 (작성|배포 M/D) — 프로젝트명`. PJT 세부 Tasks 목록 `YY.MM.DD Task명`.
+5. **TaskModal은 단일 창**: 신규 등록·기존 Task 클릭 전부 동일 컴포넌트. 필드: Task명 / 날짜(기본 작성일) / 멤버(기본=PJT 멤버 전원) / 결정&전달사항 / Todo 행(내용·담당자·PJT·삭제). 담당자 = Task 멤버 중 체크박스 복수 선택. Todo 상태는 이 창에 표기하지 않고 변경 불가. **새로 추가되는 Todo는 항상 draft로 생성**(기존 Todo 상태는 건드리지 않음). 하단: 저장 + 삭제(확인창, 기타 Task는 삭제 불가)만 — **배포 버튼 없음**(배포는 배포 탭에서 Todo 단위/Task 일괄 처리).
+6. **배포 탭**: draft Todo가 하나라도 있는 Task만 묶음 표시. 묶음 = 헤더 `Task명 (작성 M/D) — 프로젝트명` + '이 Task 전체 배포'(draft 전부 → published) + 지시사항(decisions) 미리보기 + 전체 Todo 목록(draft=정상 표시+'배포' 버튼, published=회색+'미배포로 되돌리기', checked/done=회색 표시만). 배포 시 `deployed_at=now()`, 되돌리기 시 null. draft가 없어지면 Task는 이 탭에서 사라짐. PJT 세부 Tasks 목록 표기는 `YY.MM.DD Task명`.
 7. **PJT 관리 탭**: 태그별 컬럼, PJT명 카드만. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
-8. **PJT 등록 시 "기타" Task 자동 생성**: is_misc=true, status='published', deployed_at=now().
+8. **PJT 등록 시 "기타" Task 자동 생성**: is_misc=true. 특별 취급 없음 — 기타 Task의 Todo도 draft로 생성되어 같은 배포 절차를 탄다(단, 기타 Task 자체는 삭제 불가).
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
 10. **삭제**: PJT·Task 모두 삭제 가능, cascade(스키마에 정의됨), 반드시 확인창.
 11. **PC 전용.** 반응형 작업하지 않는다.
@@ -111,11 +110,15 @@ colors: {
 // 사이드바: 구분 → active/pending/hold PJT
 supabase.from('projects').select('*, divisions(name)').neq('status','done').order('name')
 
-// Todo 체크 탭: 전체 Task(배포 무관) + Todo + 담당자 + 최신 메모 (배포 유무는 task.status로 뱃지 표기)
+// Todo 체크 탭: Task 묶음 + Todo + 담당자 + 최신 메모 (published/checked만 클라이언트 필터)
 supabase.from('tasks')
   .select(`*, projects(name, division_id),
     todos(*, projects(name, division_id), todo_assignees(people(name)),
       todo_memos(content, created_at))`)
+
+// 배포 탭: draft Todo가 있는 Task 묶음 (클라이언트 필터)
+supabase.from('tasks')
+  .select('id, title, task_date, decisions, projects(name), todos(id, title, status, sort_order)')
 
 // PJT 세부 Todo: project_id 매칭 (Task 무관)
 supabase.from('todos')

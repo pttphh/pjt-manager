@@ -33,6 +33,7 @@ interface DetailTodo {
   id: string
   title: string
   status: TodoStatus
+  deployedAt: string | null
   sort_order: number
   assignees: string[]
   memoCount: number
@@ -86,7 +87,7 @@ export default function ProjectDetailPage() {
         supabase.from('tasks').select('*').eq('project_id', id),
         supabase
           .from('todos')
-          .select('id,title,status,sort_order,todo_assignees(people(name)),todo_memos(id)')
+          .select('id,title,status,deployed_at,sort_order,todo_assignees(people(name)),todo_memos(id)')
           .eq('project_id', id)
           .order('sort_order'),
       ])
@@ -111,6 +112,7 @@ export default function ProjectDetailPage() {
             id: string
             title: string
             status: TodoStatus
+            deployed_at: string | null
             sort_order: number
             todo_assignees: { people: { name: string } }[]
             todo_memos: { id: string }[]
@@ -119,6 +121,7 @@ export default function ProjectDetailPage() {
             id: t.id,
             title: t.title,
             status: t.status,
+            deployedAt: t.deployed_at,
             sort_order: t.sort_order,
             assignees: (t.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
             memoCount: (t.todo_memos ?? []).length,
@@ -143,8 +146,15 @@ export default function ProjectDetailPage() {
   }
 
   async function toggleTodo(todo: DetailTodo) {
+    // 체크 → done. 해제 → 메모 있으면 checked, 없으면 배포됐으면 published, 미배포면 draft.
     const next: TodoStatus =
-      todo.status === 'done' ? (todo.memoCount > 0 ? 'checked' : 'pending') : 'done'
+      todo.status === 'done'
+        ? todo.memoCount > 0
+          ? 'checked'
+          : todo.deployedAt
+            ? 'published'
+            : 'draft'
+        : 'done'
     setTodos((ts) => ts.map((t) => (t.id === todo.id ? { ...t, status: next } : t)))
     await supabase.from('todos').update({ status: next }).eq('id', todo.id)
   }
@@ -158,13 +168,7 @@ export default function ProjectDetailPage() {
       // 방어적: 기타 Task가 없으면 생성
       const { data } = await supabase
         .from('tasks')
-        .insert({
-          project_id: project.id,
-          title: '기타',
-          status: 'published',
-          is_misc: true,
-          deployed_at: new Date().toISOString(),
-        })
+        .insert({ project_id: project.id, title: '기타', is_misc: true })
         .select()
         .single()
       miscId = data?.id
@@ -173,7 +177,7 @@ export default function ProjectDetailPage() {
     const maxSort = todos.reduce((m, t) => Math.max(m, t.sort_order), 0)
     const { data: newTodo } = await supabase
       .from('todos')
-      .insert({ task_id: miscId, project_id: project.id, title, status: 'pending', sort_order: maxSort + 1 })
+      .insert({ task_id: miscId, project_id: project.id, title, status: 'draft', sort_order: maxSort + 1 })
       .select()
       .single()
     if (newTodo && newTodoAssignees.length) {

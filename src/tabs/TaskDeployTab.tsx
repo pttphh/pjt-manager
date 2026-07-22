@@ -1,48 +1,52 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import TaskModal from '../components/task/TaskModal'
-import type { TaskStatus, TodoStatus } from '../types'
+import type { TodoStatus } from '../types'
 
+interface DeployTodo {
+  id: string
+  title: string
+  status: TodoStatus
+  sort_order: number
+}
 interface DeployTask {
   id: string
   title: string
   task_date: string
-  status: TaskStatus
-  deployed_at: string | null
-  projectId: string
+  decisions: string | null
   projectName: string
-  divisionId: string
-  total: number
-  done: number
+  todos: DeployTodo[]
 }
 interface RawDeploy {
   id: string
   title: string
   task_date: string
-  status: TaskStatus
-  deployed_at: string | null
-  project_id: string
-  projects: { name: string; division_id: string } | null
-  todos: { status: TodoStatus }[] | null
+  decisions: string | null
+  projects: { name: string } | null
+  todos: { id: string; title: string; status: TodoStatus; sort_order: number }[] | null
 }
 
-// 'YYYY-MM-DD...' → 'M/D' (선행 0 제거)
+// 'YYYY-MM-DD...' → 'M/D'
 const md = (d: string | null) => {
   if (!d) return ''
   const [, m, day] = d.slice(0, 10).split('-')
   return `${+m}/${+day}`
 }
 
+const STATUS_LABEL: Record<Exclude<TodoStatus, 'draft'>, string> = {
+  published: '배포됨',
+  checked: '체크',
+  done: '완료',
+}
+
+/**
+ * 배포 탭 — 배포는 Todo 단위.
+ * 미배포(draft) Todo가 하나라도 있는 Task만 묶음으로 표시하고,
+ * Todo 개별 배포 / Task 전체 배포 / 배포 취소(미배포로 되돌리기)를 처리한다.
+ */
 export default function TaskDeployTab() {
   const [tasks, setTasks] = useState<DeployTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<{
-    open: boolean
-    taskId: string
-    projectId: string
-    projectName: string
-    divisionId: string
-  } | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     void load()
@@ -53,19 +57,19 @@ export default function TaskDeployTab() {
     try {
       const { data } = await supabase
         .from('tasks')
-        .select('id, title, task_date, status, deployed_at, project_id, projects(name, division_id), todos(status)')
-      const rows = ((data as unknown as RawDeploy[]) ?? []).map((t) => ({
-        id: t.id,
-        title: t.title,
-        task_date: t.task_date,
-        status: t.status,
-        deployed_at: t.deployed_at,
-        projectId: t.project_id,
-        projectName: t.projects?.name ?? '(프로젝트 없음)',
-        divisionId: t.projects?.division_id ?? '',
-        total: (t.todos ?? []).length,
-        done: (t.todos ?? []).filter((x) => x.status === 'done').length,
-      }))
+        .select('id, title, task_date, decisions, projects(name), todos(id, title, status, sort_order)')
+      const rows: DeployTask[] = (((data as unknown as RawDeploy[]) ?? []) as RawDeploy[])
+        .map((t) => ({
+          id: t.id,
+          title: t.title,
+          task_date: t.task_date,
+          decisions: t.decisions,
+          projectName: t.projects?.name ?? '(프로젝트 없음)',
+          todos: (t.todos ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
+        }))
+        // draft Todo가 하나라도 있는 Task만 (모두 배포되면 이 탭에서 사라짐)
+        .filter((t) => t.todos.some((td) => td.status === 'draft'))
+        .sort((a, b) => (b.task_date ?? '').localeCompare(a.task_date ?? ''))
       setTasks(rows)
     } catch (e) {
       console.error('[TaskDeployTab] 로드 실패', e)
@@ -74,45 +78,64 @@ export default function TaskDeployTab() {
     }
   }
 
-  const drafts = tasks
-    .filter((t) => t.status === 'draft')
-    .sort((a, b) => (b.task_date ?? '').localeCompare(a.task_date ?? ''))
-  // 배포됨: 진행 중 Task만 (전 Todo 완료 시 제거 = 미완료 Todo가 하나라도 있어야 노출)
-  const deployed = tasks
-    .filter((t) => t.status === 'published' && t.done < t.total)
-    .sort((a, b) => (b.deployed_at ?? '').localeCompare(a.deployed_at ?? ''))
+  async function deployTodo(todoId: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await supabase
+        .from('todos')
+        .update({ status: 'published', deployed_at: new Date().toISOString() })
+        .eq('id', todoId)
+        .eq('status', 'draft')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
 
-  const openTask = (t: DeployTask) =>
-    setModal({
-      open: true,
-      taskId: t.id,
-      projectId: t.projectId,
-      projectName: t.projectName,
-      divisionId: t.divisionId,
-    })
+  async function deployTask(taskId: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await supabase
+        .from('todos')
+        .update({ status: 'published', deployed_at: new Date().toISOString() })
+        .eq('task_id', taskId)
+        .eq('status', 'draft')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
 
-  const draftBtn: React.CSSProperties = {
-    border: '1px solid #D9BE93',
-    background: '#fff',
-    color: '#633806',
-    fontSize: '12px',
+  async function unpublishTodo(todoId: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      // published 만 되돌리기 가능 (checked/done 은 대상 아님)
+      await supabase
+        .from('todos')
+        .update({ status: 'draft', deployed_at: null })
+        .eq('id', todoId)
+        .eq('status', 'published')
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const smallBtn = (variant: 'deploy' | 'revert'): React.CSSProperties => ({
+    border: `1px solid ${variant === 'deploy' ? '#185FA5' : '#CFCDC7'}`,
+    background: variant === 'deploy' ? '#185FA5' : '#fff',
+    color: variant === 'deploy' ? '#fff' : '#55534E',
+    fontSize: '11.5px',
     fontWeight: 600,
     borderRadius: 7,
-    padding: '5px 12px',
+    padding: '3px 10px',
     whiteSpace: 'nowrap',
     cursor: 'pointer',
-  }
-  const deployBtn: React.CSSProperties = {
-    border: '1px solid #CFCDC7',
-    background: '#fff',
-    color: '#55534E',
-    fontSize: '12px',
-    fontWeight: 600,
-    borderRadius: 7,
-    padding: '5px 12px',
-    whiteSpace: 'nowrap',
-    cursor: 'pointer',
-  }
+    flex: '0 0 auto',
+  })
 
   return (
     <div style={{ padding: '20px 28px 32px' }}>
@@ -120,100 +143,115 @@ export default function TaskDeployTab() {
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
         <>
-          {/* 미배포 (작성중) */}
           <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#633806', marginBottom: 10 }}>
-            미배포 <span style={{ fontWeight: 400, color: '#8A877F' }}>(작성중)</span>
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {drafts.length === 0 && <p className="text-[12px] text-ink-3">미배포 Task 없음</p>}
-            {drafts.map((t) => (
-              <div
-                key={t.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 12,
-                  border: '1px solid #E0C9A6',
-                  background: '#FAEEDA',
-                  borderRadius: 10,
-                  padding: '11px 14px',
-                }}
-              >
-                <span className="min-w-0 truncate text-[13px]">
-                  <span style={{ fontWeight: 600, color: '#633806' }}>{t.title}</span>
-                  <span style={{ opacity: 0.75 }}>
-                    {' '}
-                    (작성 {md(t.task_date)}) — {t.projectName}
-                  </span>
-                </span>
-                <button style={draftBtn} onClick={() => openTask(t)}>
-                  내용보기
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* 구분선 */}
-          <div style={{ borderTop: '1px solid #E2E0DB', margin: '20px 0' }} />
-
-          {/* 배포됨 */}
-          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B', marginBottom: 10 }}>
-            배포됨{' '}
+            미배포 Todo가 있는 Task{' '}
             <span style={{ fontWeight: 400, color: '#B4B1A9' }}>
-              — 진행 중 Task만 · 전 Todo 완료 시 제거
+              — Todo 단위로 배포 · 전부 배포되면 목록에서 사라짐
             </span>
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {deployed.length === 0 && <p className="text-[12px] text-ink-3">배포된 진행 중 Task 없음</p>}
-            {deployed.map((t) => (
-              <div
-                key={t.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 12,
-                  border: '1px solid #E2E0DB',
-                  background: '#fff',
-                  borderRadius: 10,
-                  padding: '11px 14px',
-                }}
-              >
-                <span className="min-w-0 truncate text-[13px]">
-                  <span style={{ fontWeight: 600, color: '#1F1E1B' }}>{t.title}</span>
-                  <span style={{ color: '#8A877F' }}>
-                    {' '}
-                    (배포 {md(t.deployed_at)}) — {t.projectName}
-                  </span>
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                  <span style={{ fontSize: '11.5px', color: '#8A877F' }}>
-                    Todo {t.done}/{t.total} 완료
-                  </span>
-                  <button style={deployBtn} onClick={() => openTask(t)}>
-                    내용보기
-                  </button>
-                </span>
-              </div>
-            ))}
+
+          {tasks.length === 0 && (
+            <p className="text-[12px] text-ink-3">미배포 Todo가 없습니다. (Task 작성은 PJT 세부화면에서)</p>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tasks.map((t) => {
+              const draftCount = t.todos.filter((td) => td.status === 'draft').length
+              return (
+                <div
+                  key={t.id}
+                  style={{ border: '1px solid #E0C9A6', borderRadius: 10, overflow: 'hidden' }}
+                >
+                  {/* Task 헤더 */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      background: '#FAEEDA',
+                      padding: '10px 13px',
+                    }}
+                  >
+                    <span className="min-w-0 truncate text-[13px]" style={{ color: '#633806' }}>
+                      <span style={{ fontWeight: 600 }}>{t.title}</span>
+                      <span style={{ opacity: 0.75 }}>
+                        {' '}
+                        (작성 {md(t.task_date)}) — {t.projectName}
+                      </span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
+                      <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTask(t.id)}>
+                        이 Task 전체 배포
+                      </button>
+                    </span>
+                  </div>
+
+                  {/* 지시사항 미리보기 */}
+                  {t.decisions && (
+                    <div
+                      className="truncate"
+                      style={{
+                        padding: '7px 13px',
+                        fontSize: '11.5px',
+                        color: '#8A877F',
+                        borderBottom: '1px solid #F0EFEC',
+                        background: '#fff',
+                      }}
+                      title={t.decisions}
+                    >
+                      {t.decisions}
+                    </div>
+                  )}
+
+                  {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
+                  <div style={{ background: '#fff', padding: '4px 13px 10px' }}>
+                    {t.todos.map((td) => {
+                      const isDraft = td.status === 'draft'
+                      return (
+                        <div
+                          key={td.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            paddingTop: 7,
+                          }}
+                        >
+                          <span
+                            className="min-w-0 truncate"
+                            style={{
+                              fontSize: '12.5px',
+                              color: isDraft ? '#1F1E1B' : '#B4B1A9',
+                            }}
+                          >
+                            {!isDraft && (
+                              <span style={{ fontSize: '10px', marginRight: 6 }}>
+                                [{STATUS_LABEL[td.status as Exclude<TodoStatus, 'draft'>]}]
+                              </span>
+                            )}
+                            {td.title}
+                          </span>
+                          {isDraft ? (
+                            <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTodo(td.id)}>
+                              배포
+                            </button>
+                          ) : td.status === 'published' ? (
+                            <button style={smallBtn('revert')} disabled={busy} onClick={() => unpublishTodo(td.id)}>
+                              미배포로 되돌리기
+                            </button>
+                          ) : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </>
-      )}
-
-      {modal && (
-        <TaskModal
-          open={modal.open}
-          taskId={modal.taskId}
-          projectId={modal.projectId}
-          projectName={modal.projectName}
-          divisionId={modal.divisionId}
-          onClose={() => setModal(null)}
-          onSaved={() => {
-            setModal(null)
-            void load()
-          }}
-        />
       )}
     </div>
   )

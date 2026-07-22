@@ -58,17 +58,14 @@ create table project_members (
   unique (project_id, person_id)
 );
 
--- Task
+-- Task (배포 상태 없음 — 배포는 Todo 단위로 처리)
 create table tasks (
   id uuid default gen_random_uuid() primary key,
   project_id uuid references projects(id) on delete cascade not null,  -- 소속 PJT (고정)
   title text not null,
   task_date date not null default current_date,  -- 기본=작성일, 지정 가능
   decisions text,                                -- 결정 & 전달 사항
-  status text not null default 'draft'
-    check (status in ('draft', 'published')),    -- 미배포 / 배포됨 (양방향 전환)
-  is_misc boolean not null default false,        -- "기타" 상설 Task 여부
-  deployed_at timestamptz,                       -- 배포일 (미배포 복귀 시 null)
+  is_misc boolean not null default false,        -- "기타" 상설 Task 여부 (특별 취급 없음, 표기용)
   created_at timestamptz default now()
 );
 
@@ -80,15 +77,16 @@ create table task_members (
   unique (task_id, person_id)
 );
 
--- Todo
+-- Todo (배포 단위 — 4단계 상태)
 create table todos (
   id uuid default gen_random_uuid() primary key,
   task_id uuid references tasks(id) on delete cascade not null,     -- 작성 출처 Task
   project_id uuid references projects(id) on delete cascade not null, -- 매칭 PJT (기본=Task의 PJT, 동일 구분 내 pending/active PJT로 변경 가능)
   title text not null,
-  status text not null default 'pending'
-    check (status in ('pending', 'checked', 'done')),
-    -- pending=미진행 checked=체크 done=완료 (양방향 전환 허용)
+  status text not null default 'draft'
+    check (status in ('draft', 'published', 'checked', 'done')),
+    -- draft=미배포 published=배포(미진행) checked=체크 done=완료 (양방향 전환 허용)
+  deployed_at timestamptz,                       -- 배포 시각 (미배포 복귀 시 null)
   sort_order integer default 0,
   created_at timestamptz default now()
 );
@@ -111,10 +109,12 @@ create table todo_memos (
 
 -- =============================================
 -- 앱 레벨 규칙 (스키마로 강제하지 않는 것들)
--- 1) PJT 등록 시 "기타" Task 자동 생성: is_misc=true, status='published', deployed_at=now()
+-- 1) PJT 등록 시 "기타" Task 자동 생성: is_misc=true (특별 취급 없음, Todo가 배포 단위)
 -- 2) Todo의 project_id 변경 가능 범위: 소속 Task PJT와 동일 구분 + status in ('pending','active')
--- 3) 체크박스 해제 시 복귀 상태: todo_memos 존재 → 'checked', 없으면 'pending'
--- 4) Todo 체크 화면 노출: 배포 여부 무관 전체 Task의 Todo (배포/미배포는 task.status로 뱃지 표기)
+-- 3) 체크박스 해제 시 복귀 상태: todo_memos 존재 → 'checked',
+--    없으면 deployed_at 존재 → 'published', 아니면 'draft'
+-- 4) Todo 체크 화면 노출: todos.status in ('published','checked') — draft 미노출, done 제거
+-- 5) 배포 탭: draft Todo가 있는 Task만 묶음 표시, Todo 단위/Task 일괄 배포(draft→published)
 -- =============================================
 
 -- RLS 비활성화 + anon 전체 권한

@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import type { Division } from '../types'
 
 type ViewMode = 'task' | 'person'
-type ShownStatus = 'pending' | 'checked'
+// 이 탭에 노출되는 Todo 상태: published(미진행 구간) | checked(체크됨 구간). draft 미노출, done 제거.
+type ShownStatus = 'published' | 'checked'
 
 interface TodoItem {
   id: string
@@ -11,9 +12,7 @@ interface TodoItem {
   status: ShownStatus
   taskId: string
   taskTitle: string
-  taskPublished: boolean
   taskDate: string
-  taskDeployedAt: string | null
   taskProjectName: string
   todoProjectName: string
   divisionId: string
@@ -23,9 +22,7 @@ interface TodoItem {
 interface RawTask {
   id: string
   title: string
-  status: string
   task_date: string
-  deployed_at: string | null
   projects: { name: string } | null
   todos:
     | {
@@ -53,13 +50,12 @@ const md = (d: string | null) => {
   return `${+m}/${+day}`
 }
 
-// 단일 상태 뱃지: 미배포 → 배포 → 체크 (체크되면 배포/미배포가 체크로 교체됨)
-function StatusBadge({ published, checked }: { published: boolean; checked: boolean }) {
-  const s = checked
-    ? { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '체크' }
-    : published
-      ? { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
-      : { bg: '#FAEEDA', fg: '#633806', bd: '#E0C9A6', label: '미배포' }
+// 단일 상태 뱃지 (Todo 자체 상태 기준): 배포(published) → 체크(checked)
+function StatusBadge({ status }: { status: ShownStatus }) {
+  const s =
+    status === 'checked'
+      ? { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '체크' }
+      : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
   return (
     <span
       style={{
@@ -98,11 +94,11 @@ export default function TodoCheckTab() {
     try {
       const [{ data: divData }, { data: taskData }] = await Promise.all([
         supabase.from('divisions').select('*').order('sort_order'),
-        // 배포 여부 무관 전체 Task의 Todo 표시 (배포 유무는 Todo 옆 뱃지로 표기)
+        // 노출 기준: todos.status in ('published','checked') — draft 미노출, done 제거
         supabase
           .from('tasks')
           .select(
-            'id, title, status, task_date, deployed_at, projects(name), todos(id, title, status, projects(name, division_id), todo_assignees(people(name)), todo_memos(content, created_at))',
+            'id, title, task_date, projects(name), todos(id, title, status, projects(name, division_id), todo_assignees(people(name)), todo_memos(content, created_at))',
           ),
       ])
       setDivisions((divData as Division[]) ?? [])
@@ -110,7 +106,7 @@ export default function TodoCheckTab() {
       const flat: TodoItem[] = []
       for (const t of (taskData as unknown as RawTask[]) ?? []) {
         for (const td of t.todos ?? []) {
-          if (td.status !== 'pending' && td.status !== 'checked') continue
+          if (td.status !== 'published' && td.status !== 'checked') continue
           const memos = (td.todo_memos ?? [])
             .slice()
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -120,9 +116,7 @@ export default function TodoCheckTab() {
             status: td.status,
             taskId: t.id,
             taskTitle: t.title,
-            taskPublished: t.status === 'published',
             taskDate: t.task_date,
-            taskDeployedAt: t.deployed_at,
             taskProjectName: t.projects?.name ?? '(프로젝트 없음)',
             todoProjectName: td.projects?.name ?? '(프로젝트 없음)',
             divisionId: td.projects?.division_id ?? '',
@@ -159,8 +153,8 @@ export default function TodoCheckTab() {
     void load()
   }
   async function uncheckTodo(todoId: string) {
-    // 체크 해제 → 미진행 복귀 (메모 이력은 유지)
-    await supabase.from('todos').update({ status: 'pending' }).eq('id', todoId)
+    // 체크 해제 → 미진행(published) 복귀 (메모 이력은 유지, 배포 상태는 그대로)
+    await supabase.from('todos').update({ status: 'published' }).eq('id', todoId)
     void load()
   }
 
@@ -205,9 +199,7 @@ export default function TodoCheckTab() {
       return {
         key: `t:${status}:${tid}`,
         name: first.taskTitle,
-        metaLine: first.taskPublished
-          ? `(배포 ${md(first.taskDeployedAt)}) — ${first.taskProjectName}`
-          : `(작성 ${md(first.taskDate)}) — ${first.taskProjectName}`,
+        metaLine: `(작성 ${md(first.taskDate)}) — ${first.taskProjectName}`,
         count: todos.length,
         todos: todos.map((it) => ({
           ...it,
@@ -218,7 +210,7 @@ export default function TodoCheckTab() {
     })
   }
 
-  const unchecked = buildGroups('pending')
+  const unchecked = buildGroups('published')
   const checked = buildGroups('checked')
   const isOpen = (key: string) => !collapsed[key]
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
@@ -321,7 +313,7 @@ export default function TodoCheckTab() {
                       <div key={td.id} style={{ paddingTop: 11 }}>
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
                           <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
-                            <StatusBadge published={td.taskPublished} checked={td.status === 'checked'} />
+                            <StatusBadge status={td.status} />
                             {td.title}
                           </span>
                           <span style={{ flex: '0 0 auto', fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>
@@ -396,7 +388,7 @@ export default function TodoCheckTab() {
                       <div key={td.id} style={{ paddingTop: 11 }}>
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
                           <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
-                            <StatusBadge published={td.taskPublished} checked={td.status === 'checked'} />
+                            <StatusBadge status={td.status} />
                             {td.title}
                           </span>
                           <span style={{ flex: '0 0 auto', fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>
