@@ -21,6 +21,7 @@ interface DetailProject {
   name: string
   description: string | null
   link_url?: string | null
+  link_urls?: string[] | null
   division_id: string
   status: ProjectStatus
   start_date: string | null
@@ -230,6 +231,12 @@ export default function ProjectDetailPage() {
   const sm = STATUS_META[project.status]
   const tags = (project.project_tags ?? []).map((pt) => pt.tags).filter(Boolean)
   const members = (project.project_members ?? []).map((pm) => pm.people).filter(Boolean)
+  const projectLinks =
+    project.link_urls && project.link_urls.length
+      ? project.link_urls
+      : project.link_url
+        ? [project.link_url]
+        : []
   const openTodos = todos.filter((t) => t.status !== 'done')
   const doneTodos = todos.filter((t) => t.status === 'done')
 
@@ -267,18 +274,23 @@ export default function ProjectDetailPage() {
             </button>
           </div>
           <div className="space-y-1 text-[12px] text-ink-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               <span className="w-[72px] flex-shrink-0 text-ink-3">링크</span>
-              {project.link_url ? (
-                <a
-                  href={toHref(project.link_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="새 창으로 열기"
-                  className="min-w-0 truncate text-primary hover:underline"
-                >
-                  {project.link_url} ↗
-                </a>
+              {projectLinks.length > 0 ? (
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  {projectLinks.map((u, i) => (
+                    <a
+                      key={i}
+                      href={toHref(u)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="새 창으로 열기"
+                      className="min-w-0 truncate text-primary hover:underline"
+                    >
+                      {u} ↗
+                    </a>
+                  ))}
+                </span>
               ) : (
                 <span className="text-ink-3">—</span>
               )}

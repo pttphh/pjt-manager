@@ -24,7 +24,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [linkUrl, setLinkUrl] = useState('')
+  const [links, setLinks] = useState<string[]>([])
   const [divisionId, setDivisionId] = useState('')
   const [tagIds, setTagIds] = useState<string[]>([])
   const [members, setMembers] = useState<Person[]>([])
@@ -54,7 +54,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
   function resetForm() {
     setName('')
     setDescription('')
-    setLinkUrl('')
+    setLinks([])
     setTagIds([])
     setMembers([])
     setStartDate('')
@@ -70,7 +70,9 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
     if (!data) return
     setName(data.name ?? '')
     setDescription(data.description ?? '')
-    setLinkUrl(data.link_url ?? '')
+    setLinks(
+      (data.link_urls && data.link_urls.length ? data.link_urls : data.link_url ? [data.link_url] : []) as string[],
+    )
     setDivisionId(data.division_id ?? '')
     setStartDate(data.start_date ?? '')
     setDueDate(data.due_date ?? '')
@@ -98,13 +100,14 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
         start_date: startDate || null,
         due_date: dueDate || null,
       }
-      const withLink = { ...base, link_url: linkUrl.trim() || null }
-      // migrations/003 미적용(link_url 컬럼 없음) 시에도 저장이 깨지지 않도록 폴백.
+      const cleanLinks = links.map((l) => l.trim()).filter(Boolean)
+      const withLink = { ...base, link_urls: cleanLinks }
+      // migrations/006 미적용(link_urls 컬럼 없음) 시에도 저장이 깨지지 않도록 폴백.
       // 읽기는 42703, 쓰기는 PGRST204(schema cache에 컬럼 없음)로 서로 다른 코드가 온다.
       const missingCol = (e: { code?: string; message?: string } | null) =>
         !!e && (e.code === '42703' || e.code === 'PGRST204' || /link_url/i.test(e.message ?? ''))
       const warnMigration = () =>
-        alert('링크는 저장되지 않았습니다.\nmigrations/003-project-link.sql 을 적용하세요.')
+        alert('링크는 저장되지 않았습니다.\nmigrations/006-project-links-multi.sql 을 적용하세요.')
 
       if (isEdit) {
         let { error } = await supabase.from('projects').update(withLink).eq('id', projectId)
@@ -192,15 +195,34 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
       />
 
       <div className={labelCls}>
-        링크 <span className="text-[10px] font-normal text-ink-3">— 선택, 새 창으로 열림</span>
+        링크 <span className="text-[10px] font-normal text-ink-3">— 선택, 여러 개 가능 · 새 창으로 열림</span>
       </div>
-      <input
-        type="url"
-        value={linkUrl}
-        onChange={(e) => setLinkUrl(e.target.value)}
-        placeholder="https://example.com/…"
-        className={`${inputCls} mb-2.5`}
-      />
+      <div className="mb-2.5 flex flex-col gap-1.5">
+        {links.map((l, i) => (
+          <div key={i} className="flex gap-1.5">
+            <input
+              type="url"
+              value={l}
+              onChange={(e) => setLinks((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
+              placeholder="https://example.com/…"
+              className={`${inputCls} flex-1`}
+            />
+            <button
+              onClick={() => setLinks((prev) => prev.filter((_, j) => j !== i))}
+              title="링크 삭제"
+              className="flex-shrink-0 rounded-lg border border-line-strong px-2.5 text-ink-3 hover:text-danger"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => setLinks((prev) => [...prev, ''])}
+          className="rounded-lg border border-dashed border-line-strong py-1.5 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
+        >
+          + 링크 추가
+        </button>
+      </div>
 
       <div className={labelCls}>구분 (필수, 1개)</div>
       <div className="mb-2.5 flex gap-1.5">

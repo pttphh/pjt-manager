@@ -58,7 +58,7 @@ export interface Person { id: string; name: string }
 
 export interface Project {
   id: string; name: string; description: string | null
-  link_url?: string | null            // 관련 온라인 주소 (migrations/003), 세부화면 상단에서 새 창으로 열림
+  link_urls?: string[] | null         // 관련 온라인 주소 여러 개 (migrations/006), 세부화면 상단에서 각각 새 창으로 열림 (구 단일 link_url=003)
   division_id: string; status: ProjectStatus
   start_date: string | null; due_date: string | null; completed_at: string | null
   divisions?: Division
