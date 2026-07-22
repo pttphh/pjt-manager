@@ -67,8 +67,9 @@ export default function TaskDeployTab() {
           projectName: t.projects?.name ?? '(프로젝트 없음)',
           todos: (t.todos ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
         }))
-        // draft Todo가 하나라도 있는 Task만 (모두 배포되면 이 탭에서 사라짐)
-        .filter((t) => t.todos.some((td) => td.status === 'draft'))
+        // 미배포(draft) 또는 배포됨(published) Todo가 있는 Task 표시.
+        // 배포해도 회색으로 남아 되돌리기 가능하며, 모든 Todo가 체크/완료로 넘어가야 사라짐.
+        .filter((t) => t.todos.some((td) => td.status === 'draft' || td.status === 'published'))
         .sort((a, b) => (b.task_date ?? '').localeCompare(a.task_date ?? ''))
       setTasks(rows)
     } catch (e) {
@@ -143,48 +144,65 @@ export default function TaskDeployTab() {
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
         <>
-          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#633806', marginBottom: 10 }}>
-            미배포 Todo가 있는 Task{' '}
+          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B', marginBottom: 10 }}>
+            배포 관리{' '}
             <span style={{ fontWeight: 400, color: '#B4B1A9' }}>
-              — Todo 단위로 배포 · 전부 배포되면 목록에서 사라짐
+              — Todo 단위로 배포/되돌리기 · 배포된 Todo는 회색으로 유지 · 체크 단계로 넘어가면 사라짐
             </span>
           </p>
 
           {tasks.length === 0 && (
-            <p className="text-[12px] text-ink-3">미배포 Todo가 없습니다. (Task 작성은 PJT 세부화면에서)</p>
+            <p className="text-[12px] text-ink-3">배포 관리할 Todo가 없습니다. (Task 작성은 PJT 세부화면에서)</p>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {tasks.map((t) => {
               const draftCount = t.todos.filter((td) => td.status === 'draft').length
+              const hasDraft = draftCount > 0
+              const publishedCount = t.todos.filter((td) => td.status === 'published').length
               return (
                 <div
                   key={t.id}
-                  style={{ border: '1px solid #E0C9A6', borderRadius: 10, overflow: 'hidden' }}
+                  style={{
+                    border: `1px solid ${hasDraft ? '#E0C9A6' : '#E2E0DB'}`,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                  }}
                 >
-                  {/* Task 헤더 */}
+                  {/* Task 헤더 — draft 있으면 주황(미배포), 전부 배포됐으면 회색 */}
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: 12,
-                      background: '#FAEEDA',
+                      background: hasDraft ? '#FAEEDA' : '#F5F4F0',
                       padding: '10px 13px',
                     }}
                   >
-                    <span className="min-w-0 truncate text-[13px]" style={{ color: '#633806' }}>
+                    <span
+                      className="min-w-0 truncate text-[13px]"
+                      style={{ color: hasDraft ? '#633806' : '#1F1E1B' }}
+                    >
                       <span style={{ fontWeight: 600 }}>{t.title}</span>
-                      <span style={{ opacity: 0.75 }}>
+                      <span style={{ opacity: 0.75, color: hasDraft ? undefined : '#8A877F' }}>
                         {' '}
                         (작성 {md(t.task_date)}) — {t.projectName}
                       </span>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
-                      <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTask(t.id)}>
-                        이 Task 전체 배포
-                      </button>
+                      {hasDraft ? (
+                        <>
+                          <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
+                          <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTask(t.id)}>
+                            이 Task 전체 배포
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '11.5px', color: '#8A877F' }}>
+                          배포됨 {publishedCount}건 · 되돌리기 가능
+                        </span>
+                      )}
                     </span>
                   </div>
 

@@ -71,7 +71,7 @@ PJT (구분 1개 필수, 태그 0~n개)
 ### 화면 노출 규칙
 - Todo 체크 화면: **published·checked 상태 Todo만** 노출 (draft 미노출, done 제거, 전 Todo 완료 시 그룹도 제거)
 - PJT 세부화면 Todo 목록: 미배포 Task의 Todo **포함** 전체 표시
-- 배포 탭 노출: draft Todo가 있는 Task만 (전부 배포되면 탭에서 사라짐, PJT 세부화면에서 열람)
+- 배포 탭 노출: draft 또는 published Todo가 있는 Task (배포해도 회색으로 남아 되돌리기 가능, 전 Todo가 checked/done이면 사라짐)
 
 ### "기타" 상설 Task
 - PJT 등록 시 "기타" Task 자동 생성 (특별 취급 없음 — 기타 Todo도 draft로 생성되어 배포 절차를 탐)
@@ -105,7 +105,7 @@ PJT 클릭 시 → PJT 세부화면으로 이동.
   - 한 Task가 미진행·체크 Todo를 모두 가지면 양쪽 구간에 동시 노출 (각 구간엔 해당 상태 Todo만)
 
 #### 탭 B. 배포
-- draft Todo가 있는 Task만 묶음 표시: 헤더 `Task명 (작성 M/D) — 프로젝트명` + 미배포 건수 + '이 Task 전체 배포'
+- draft 또는 published Todo가 있는 Task 묶음 표시: 헤더 `Task명 (작성 M/D) — 프로젝트명` + (draft 있으면 미배포 건수+'이 Task 전체 배포', 전부 배포됐으면 '배포됨 n건·되돌리기 가능')
 - 묶음 내부: 지시사항(decisions) 미리보기 + 전체 Todo 목록
   - draft Todo: 정상 표시 + 개별 '배포' 버튼
   - published Todo: 회색 + '미배포로 되돌리기'(→ draft, deployed_at null)
