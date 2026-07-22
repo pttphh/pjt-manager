@@ -238,7 +238,7 @@ export default function TaskDeployTab() {
                   </div>
 
                   {/* 멤버 */}
-                  <div style={{ background: '#fff', padding: '9px 13px 0' }}>
+                  <div style={{ background: '#fff', padding: '10px 13px' }}>
                     <div style={SEC_LABEL}>멤버</div>
                     <div style={{ fontSize: '12px', color: t.members.length ? '#55534E' : '#B4B1A9' }}>
                       {t.members.length ? t.members.join(', ') : '—'}
@@ -246,7 +246,7 @@ export default function TaskDeployTab() {
                   </div>
 
                   {/* 지시 & 전달 사항 */}
-                  <div style={{ background: '#fff', padding: '9px 13px 0' }}>
+                  <div style={{ background: '#FBFBFA', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
                     <div style={SEC_LABEL}>지시 &amp; 전달 사항</div>
                     <div
                       style={{
@@ -261,8 +261,8 @@ export default function TaskDeployTab() {
                   </div>
 
                   {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
-                  <div style={{ background: '#fff', padding: '9px 13px 10px' }}>
-                    <div style={SEC_LABEL}>Todo</div>
+                  <div style={{ background: '#fff', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
+                    <div style={{ ...SEC_LABEL, marginBottom: 6 }}>Todo</div>
                     {t.todos.map((td) => {
                       const isDraft = td.status === 'draft'
                       return (

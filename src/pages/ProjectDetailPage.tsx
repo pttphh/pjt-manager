@@ -37,6 +37,8 @@ interface DetailTodo {
   sort_order: number
   assignees: string[]
   memoCount: number
+  todoProjectId: string // 이 Todo가 담당(태그)된 PJT
+  todoProjectName: string
 }
 
 const fmtDot = (d: string | null, short = false) => {
@@ -76,21 +78,22 @@ export default function ProjectDetailPage() {
   async function load() {
     setLoading(true)
     try {
-      const [{ data: proj }, { data: taskData }, { data: todoData }] = await Promise.all([
-        supabase
-          .from('projects')
-          .select(
-            '*, divisions(id,name), project_tags(tags(id,name,sort_order,color_bg,color_fg,color_bd)), project_members(people(id,name))',
-          )
-          .eq('id', id)
-          .single(),
-        supabase.from('tasks').select('*').eq('project_id', id),
-        supabase
-          .from('todos')
-          .select('id,title,status,deployed_at,sort_order,todo_assignees(people(name)),todo_memos(id)')
-          .eq('project_id', id)
-          .order('sort_order'),
-      ])
+      // Todo 노출 = 이 PJT에 담당(todo.project_id) OR 이 PJT의 Task 소속(task.project_id) 합집합
+      const todoFields =
+        'id,title,status,deployed_at,sort_order,project_id,projects(name),todo_assignees(people(name)),todo_memos(id)'
+      const [{ data: proj }, { data: taskData }, { data: todoByProject }, { data: todoByTask }] =
+        await Promise.all([
+          supabase
+            .from('projects')
+            .select(
+              '*, divisions(id,name), project_tags(tags(id,name,sort_order,color_bg,color_fg,color_bd)), project_members(people(id,name))',
+            )
+            .eq('id', id)
+            .single(),
+          supabase.from('tasks').select('*').eq('project_id', id),
+          supabase.from('todos').select(todoFields).eq('project_id', id),
+          supabase.from('todos').select(`${todoFields},tasks!inner(project_id)`).eq('tasks.project_id', id),
+        ])
 
       if (!proj) {
         // 편집 팝업에서 삭제됐거나 없는 PJT → 목록으로
@@ -106,27 +109,38 @@ export default function ProjectDetailPage() {
       })
       setTasks(ts)
 
+      // 두 결과 합치고 id로 중복 제거
+      const byId = new Map<string, unknown>()
+      for (const t of [...((todoByProject as unknown[]) ?? []), ...((todoByTask as unknown[]) ?? [])]) {
+        byId.set((t as { id: string }).id, t)
+      }
       setTodos(
-        ((todoData as unknown[]) ?? []).map((raw) => {
-          const t = raw as {
-            id: string
-            title: string
-            status: TodoStatus
-            deployed_at: string | null
-            sort_order: number
-            todo_assignees: { people: { name: string } }[]
-            todo_memos: { id: string }[]
-          }
-          return {
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            deployedAt: t.deployed_at,
-            sort_order: t.sort_order,
-            assignees: (t.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
-            memoCount: (t.todo_memos ?? []).length,
-          }
-        }),
+        [...byId.values()]
+          .map((raw) => {
+            const t = raw as {
+              id: string
+              title: string
+              status: TodoStatus
+              deployed_at: string | null
+              sort_order: number
+              project_id: string
+              projects: { name: string } | null
+              todo_assignees: { people: { name: string } }[]
+              todo_memos: { id: string }[]
+            }
+            return {
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              deployedAt: t.deployed_at,
+              sort_order: t.sort_order,
+              assignees: (t.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
+              memoCount: (t.todo_memos ?? []).length,
+              todoProjectId: t.project_id,
+              todoProjectName: t.projects?.name ?? '',
+            }
+          })
+          .sort((a, b) => a.sort_order - b.sort_order),
       )
     } catch (e) {
       console.error('[ProjectDetailPage] 로드 실패', e)
@@ -143,6 +157,12 @@ export default function ProjectDetailPage() {
       .update({ status: next, completed_at: next === 'done' ? new Date().toISOString() : null })
       .eq('id', project.id)
     emitDataChanged() // 완료 전환 등으로 사이드바 노출 여부 바뀜
+  }
+
+  async function deleteTodo(todo: DetailTodo) {
+    if (!confirm(`'${todo.title}' Todo를 삭제하시겠습니까?\n담당자·메모도 함께 삭제됩니다.`)) return
+    setTodos((ts) => ts.filter((t) => t.id !== todo.id))
+    await supabase.from('todos').delete().eq('id', todo.id)
   }
 
   async function toggleTodo(todo: DetailTodo) {
@@ -438,34 +458,59 @@ export default function ProjectDetailPage() {
             )}
             <div>
               {todos.length === 0 && <p className="py-4 text-center text-[12px] text-ink-3">Todo 없음</p>}
-              {openTodos.map((t) => (
-                <label key={t.id} className="mb-1.5 flex cursor-pointer items-start gap-2 text-[12.5px]">
-                  <input
-                    type="checkbox"
-                    checked={false}
-                    onChange={() => toggleTodo(t)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    {t.title}
-                    {t.assignees.length > 0 && (
-                      <span className="text-[10px] text-ink-3"> — {t.assignees.join(', ')}</span>
-                    )}
-                  </span>
-                </label>
-              ))}
+              {openTodos.map((t) => {
+                const elsewhere = !!t.todoProjectId && t.todoProjectId !== project.id
+                return (
+                  <div key={t.id} className="group mb-1.5 flex items-start justify-between gap-2">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 text-[12.5px]">
+                      <input type="checkbox" checked={false} onChange={() => toggleTodo(t)} className="mt-0.5" />
+                      <span className="min-w-0">
+                        {t.title}
+                        {t.assignees.length > 0 && (
+                          <span className="text-[10px] text-ink-3"> — {t.assignees.join(', ')}</span>
+                        )}
+                        {elsewhere && (
+                          <span className="ml-1 whitespace-nowrap rounded bg-primary-light px-1.5 py-[1px] text-[10px] text-primary-text">
+                            → {t.todoProjectName}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                    <button
+                      onClick={() => deleteTodo(t)}
+                      title="Todo 삭제"
+                      className="mt-px flex-shrink-0 rounded px-1 text-[11px] text-ink-4 hover:text-danger"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                )
+              })}
               {doneTodos.length > 0 && openTodos.length > 0 && (
                 <div className="my-2 border-t border-line" />
               )}
-              {doneTodos.map((t) => (
-                <label key={t.id} className="mb-1.5 flex cursor-pointer items-start gap-2 text-[12.5px] text-ink-3">
-                  <input type="checkbox" checked onChange={() => toggleTodo(t)} className="mt-0.5" />
-                  <span>
-                    <s>{t.title}</s>
-                    {t.assignees.length > 0 && <span className="text-[10px]"> — {t.assignees.join(', ')}</span>}
-                  </span>
-                </label>
-              ))}
+              {doneTodos.map((t) => {
+                const elsewhere = !!t.todoProjectId && t.todoProjectId !== project.id
+                return (
+                  <div key={t.id} className="mb-1.5 flex items-start justify-between gap-2 text-ink-3">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 text-[12.5px]">
+                      <input type="checkbox" checked onChange={() => toggleTodo(t)} className="mt-0.5" />
+                      <span className="min-w-0">
+                        <s>{t.title}</s>
+                        {t.assignees.length > 0 && <span className="text-[10px]"> — {t.assignees.join(', ')}</span>}
+                        {elsewhere && <span className="ml-1 text-[10px]">→ {t.todoProjectName}</span>}
+                      </span>
+                    </label>
+                    <button
+                      onClick={() => deleteTodo(t)}
+                      title="Todo 삭제"
+                      className="mt-px flex-shrink-0 rounded px-1 text-[11px] text-ink-4 hover:text-danger"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                )
+              })}
             </div>
             <p className="mt-3 text-[10px] text-ink-3">
               체크 → 완료 · 해제 → 메모 있으면 '체크', 없으면 '미진행' 복귀
