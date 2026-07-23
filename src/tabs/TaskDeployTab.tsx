@@ -67,8 +67,10 @@ export default function TaskDeployTab() {
   const [tasks, setTasks] = useState<DeployTask[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}) // Task 접기/펼치기
-  const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}) // Task 접기/펼치기(명시값)
+  // 배포됨 Task는 기본 접힘이라, 현재 '보이는' 상태를 받아 반대로 토글
+  const toggleCollapse = (id: string, current: boolean) =>
+    setCollapsed((c) => ({ ...c, [id]: !current }))
 
   useEffect(() => {
     void load()
@@ -172,174 +174,166 @@ export default function TaskDeployTab() {
     flex: '0 0 auto',
   })
 
+  function renderTask(t: DeployTask) {
+    const draftCount = t.todos.filter((td) => td.status === 'draft').length
+    const hasDraft = draftCount > 0
+    const publishedCount = t.todos.filter((td) => td.status === 'published').length
+    // 배포됨(미배포 없음) Task는 기본 접힘, 미배포 Task는 기본 펼침
+    const isCollapsed = collapsed[t.id] ?? !hasDraft
+    return (
+      <div
+        key={t.id}
+        style={{
+          border: `1px solid ${hasDraft ? '#E0C9A6' : '#E2E0DB'}`,
+          borderRadius: 10,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Task 헤더 — 클릭 시 접기/펼치기 (배포 버튼은 stopPropagation) */}
+        <div
+          onClick={() => toggleCollapse(t.id, isCollapsed)}
+          title={isCollapsed ? '펼치기' : '접기'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            background: hasDraft ? '#FAEEDA' : '#F5F4F0',
+            padding: '10px 13px',
+            cursor: 'pointer',
+          }}
+        >
+          <span className="min-w-0 truncate text-[13px]" style={{ color: hasDraft ? '#633806' : '#1F1E1B' }}>
+            <span
+              style={{ display: 'inline-block', width: 14, fontSize: '10px', color: hasDraft ? '#633806' : '#8A877F' }}
+            >
+              {isCollapsed ? '▶' : '▼'}
+            </span>
+            <span style={{ fontWeight: 600 }}>{t.title}</span>
+            <span style={{ opacity: 0.75, color: hasDraft ? undefined : '#8A877F' }}>
+              {' '}
+              (작성 {md(t.task_date)}) — {t.projectName}
+            </span>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {hasDraft ? (
+              <>
+                <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
+                <button
+                  style={smallBtn('deploy')}
+                  disabled={busy}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deployTask(t.id)
+                  }}
+                >
+                  이 Task 전체 배포
+                </button>
+              </>
+            ) : (
+              <span style={{ fontSize: '11.5px', color: '#8A877F' }}>배포됨 {publishedCount}건 · 되돌리기 가능</span>
+            )}
+          </span>
+        </div>
+
+        {!isCollapsed && (
+          <>
+            {/* 멤버 */}
+            <div style={{ background: '#fff', padding: '10px 13px' }}>
+              <div style={SEC_LABEL}>멤버</div>
+              <div style={{ fontSize: '12px', color: t.members.length ? '#55534E' : '#B4B1A9' }}>
+                {t.members.length ? t.members.join(', ') : '—'}
+              </div>
+            </div>
+
+            {/* 지시 & 전달 사항 */}
+            <div style={{ background: '#FBFBFA', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
+              <div style={SEC_LABEL}>지시 &amp; 전달 사항</div>
+              <div style={{ fontSize: '12px', color: t.decisions ? '#55534E' : '#B4B1A9', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {t.decisions ? renderBold(t.decisions) : '—'}
+              </div>
+            </div>
+
+            {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
+            <div style={{ background: '#fff', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
+              <div style={{ ...SEC_LABEL, marginBottom: 6 }}>Todo</div>
+              {t.todos.map((td) => {
+                const isDraft = td.status === 'draft'
+                return (
+                  <div
+                    key={td.id}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingTop: 7 }}
+                  >
+                    <span className="min-w-0 truncate" style={{ fontSize: '12.5px', color: isDraft ? '#1F1E1B' : '#B4B1A9' }}>
+                      {!isDraft && (
+                        <span style={{ fontSize: '10px', marginRight: 6 }}>
+                          [{STATUS_LABEL[td.status as Exclude<TodoStatus, 'draft'>]}]
+                        </span>
+                      )}
+                      {td.title}
+                      {td.assignees.length > 0 && (
+                        <span style={{ fontSize: '10.5px', color: isDraft ? '#8A877F' : '#B4B1A9', marginLeft: 6 }}>
+                          — {td.assignees.join(', ')}
+                        </span>
+                      )}
+                    </span>
+                    {isDraft ? (
+                      <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTodo(td.id)}>
+                        배포
+                      </button>
+                    ) : td.status === 'published' ? (
+                      <button style={smallBtn('revert')} disabled={busy} onClick={() => unpublishTodo(td.id)}>
+                        미배포로 되돌리기
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  const undeployed = tasks.filter((t) => t.todos.some((td) => td.status === 'draft'))
+  const deployed = tasks.filter((t) => !t.todos.some((td) => td.status === 'draft'))
+
   return (
     <div style={{ padding: '20px 28px 32px' }}>
       {loading ? (
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
         <>
-          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B', marginBottom: 10 }}>
-            배포 관리{' '}
-            <span style={{ fontWeight: 400, color: '#B4B1A9' }}>
-              — Todo 단위로 배포/되돌리기 · 배포된 Todo는 회색으로 유지 · 체크 단계로 넘어가면 사라짐
-            </span>
+          {/* ── 미배포 (작성중) ── */}
+          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#633806', marginBottom: 10 }}>
+            미배포 <span style={{ fontWeight: 400, color: '#B4B1A9' }}>(작성중) — 배포할 Todo가 있는 Task</span>
           </p>
-
-          {tasks.length === 0 && (
-            <p className="text-[12px] text-ink-3">배포 관리할 Todo가 없습니다. (Task 작성은 PJT 세부화면에서)</p>
+          {undeployed.length === 0 ? (
+            <p className="mb-1 text-[12px] text-ink-3">미배포 Task가 없습니다.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {undeployed.map(renderTask)}
+            </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {tasks.map((t) => {
-              const draftCount = t.todos.filter((td) => td.status === 'draft').length
-              const hasDraft = draftCount > 0
-              const publishedCount = t.todos.filter((td) => td.status === 'published').length
-              const isCollapsed = !!collapsed[t.id]
-              return (
-                <div
-                  key={t.id}
-                  style={{
-                    border: `1px solid ${hasDraft ? '#E0C9A6' : '#E2E0DB'}`,
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {/* Task 헤더 — 클릭 시 접기/펼치기 (배포 버튼은 stopPropagation) */}
-                  <div
-                    onClick={() => toggleCollapse(t.id)}
-                    title={isCollapsed ? '펼치기' : '접기'}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      background: hasDraft ? '#FAEEDA' : '#F5F4F0',
-                      padding: '10px 13px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span
-                      className="min-w-0 truncate text-[13px]"
-                      style={{ color: hasDraft ? '#633806' : '#1F1E1B' }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: 14,
-                          fontSize: '10px',
-                          color: hasDraft ? '#633806' : '#8A877F',
-                        }}
-                      >
-                        {isCollapsed ? '▶' : '▼'}
-                      </span>
-                      <span style={{ fontWeight: 600 }}>{t.title}</span>
-                      <span style={{ opacity: 0.75, color: hasDraft ? undefined : '#8A877F' }}>
-                        {' '}
-                        (작성 {md(t.task_date)}) — {t.projectName}
-                      </span>
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      {hasDraft ? (
-                        <>
-                          <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
-                          <button
-                            style={smallBtn('deploy')}
-                            disabled={busy}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deployTask(t.id)
-                            }}
-                          >
-                            이 Task 전체 배포
-                          </button>
-                        </>
-                      ) : (
-                        <span style={{ fontSize: '11.5px', color: '#8A877F' }}>
-                          배포됨 {publishedCount}건 · 되돌리기 가능
-                        </span>
-                      )}
-                    </span>
-                  </div>
+          {/* 구분선 */}
+          <div style={{ borderTop: '1px solid #E2E0DB', margin: '22px 0 16px' }} />
 
-                  {!isCollapsed && (
-                  <>
-                  {/* 멤버 */}
-                  <div style={{ background: '#fff', padding: '10px 13px' }}>
-                    <div style={SEC_LABEL}>멤버</div>
-                    <div style={{ fontSize: '12px', color: t.members.length ? '#55534E' : '#B4B1A9' }}>
-                      {t.members.length ? t.members.join(', ') : '—'}
-                    </div>
-                  </div>
-
-                  {/* 지시 & 전달 사항 */}
-                  <div style={{ background: '#FBFBFA', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
-                    <div style={SEC_LABEL}>지시 &amp; 전달 사항</div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: t.decisions ? '#55534E' : '#B4B1A9',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {t.decisions ? renderBold(t.decisions) : '—'}
-                    </div>
-                  </div>
-
-                  {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
-                  <div style={{ background: '#fff', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
-                    <div style={{ ...SEC_LABEL, marginBottom: 6 }}>Todo</div>
-                    {t.todos.map((td) => {
-                      const isDraft = td.status === 'draft'
-                      return (
-                        <div
-                          key={td.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                            paddingTop: 7,
-                          }}
-                        >
-                          <span
-                            className="min-w-0 truncate"
-                            style={{
-                              fontSize: '12.5px',
-                              color: isDraft ? '#1F1E1B' : '#B4B1A9',
-                            }}
-                          >
-                            {!isDraft && (
-                              <span style={{ fontSize: '10px', marginRight: 6 }}>
-                                [{STATUS_LABEL[td.status as Exclude<TodoStatus, 'draft'>]}]
-                              </span>
-                            )}
-                            {td.title}
-                            {td.assignees.length > 0 && (
-                              <span style={{ fontSize: '10.5px', color: isDraft ? '#8A877F' : '#B4B1A9', marginLeft: 6 }}>
-                                — {td.assignees.join(', ')}
-                              </span>
-                            )}
-                          </span>
-                          {isDraft ? (
-                            <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTodo(td.id)}>
-                              배포
-                            </button>
-                          ) : td.status === 'published' ? (
-                            <button style={smallBtn('revert')} disabled={busy} onClick={() => unpublishTodo(td.id)}>
-                              미배포로 되돌리기
-                            </button>
-                          ) : null}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          {/* ── 배포됨 (기본 접힘) ── */}
+          <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B', marginBottom: 10 }}>
+            배포됨{' '}
+            <span style={{ fontWeight: 400, color: '#B4B1A9' }}>
+              — 되돌리기 가능 · 체크되면 사라짐 · 헤더 클릭으로 펼치기
+            </span>
+          </p>
+          {deployed.length === 0 ? (
+            <p className="text-[12px] text-ink-3">배포된 Task가 없습니다.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {deployed.map(renderTask)}
+            </div>
+          )}
         </>
       )}
     </div>
