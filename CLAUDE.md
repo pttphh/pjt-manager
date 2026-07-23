@@ -38,7 +38,7 @@ src/
     ui/       Badge.tsx Button.tsx Modal.tsx TagInput.tsx
               ItemManager.tsx  -- 구분·태그·멤버 목록/수정/삭제/추가 공용 (설정 3탭 + ⚙ 팝업)
               InlineManage.tsx -- ItemManager를 감싼 ⚙ 인라인 팝업 껍데기
-    task/     TaskModal.tsx          -- 보기/편집 겸용 단일 팝업 (아래 참조)
+    task/     TaskModal.tsx          -- 우측 사이드 패널(drawer). 바깥클릭 닫힘 없음(dirty면 확인창), X·취소만. decisions Ctrl+B 볼드
     project/  ProjectFormModal.tsx   -- PJT 등록/편집 (⚙ 인라인 구분·태그 관리 포함)
   pages/      PasswordPage.tsx MainPage.tsx ProjectDetailPage.tsx SettingsPage.tsx
   tabs/       TodoCheckTab.tsx TaskDeployTab.tsx ProjectManageTab.tsx

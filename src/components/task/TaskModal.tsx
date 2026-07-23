@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import TagInput from '../ui/TagInput'
 import { supabase } from '../../lib/supabase'
@@ -30,6 +29,28 @@ interface PjtOpt {
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
+// 변경 감지용 스냅샷 (닫을 때 dirty 여부 판단)
+function snapshotOf(
+  title: string,
+  taskDate: string,
+  decisions: string,
+  members: Person[],
+  todos: TodoRow[],
+): string {
+  return JSON.stringify({
+    title: title.trim(),
+    taskDate,
+    decisions,
+    members: members.map((m) => m.id).sort(),
+    todos: todos.map((t) => ({
+      id: t.id ?? null,
+      title: t.title.trim(),
+      projectId: t.projectId,
+      a: [...t.assigneeIds].sort(),
+    })),
+  })
+}
+
 export default function TaskModal({
   open,
   onClose,
@@ -50,6 +71,9 @@ export default function TaskModal({
   const [assigneeOpen, setAssigneeOpen] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const originalTodoIds = useRef<string[]>([])
+  const initialSnapRef = useRef('') // 로드 직후 상태 스냅샷
+  const decisionsRef = useRef<HTMLTextAreaElement>(null)
+  const pendingSel = useRef<[number, number] | null>(null) // Ctrl+B 후 복원할 선택 범위
 
   useEffect(() => {
     if (open) void init()
@@ -78,13 +102,9 @@ export default function TaskModal({
         .eq('id', taskId)
         .single()
       if (data) {
-        setTitle(data.title ?? '')
-        setTaskDate(data.task_date ?? todayStr())
-        setDecisions(data.decisions ?? '')
-        setIsMisc(!!data.is_misc)
-        setMembers(
-          (data.task_members ?? []).map((m: { people: Person }) => m.people).filter(Boolean),
-        )
+        const mem = (data.task_members ?? [])
+          .map((m: { people: Person }) => m.people)
+          .filter(Boolean) as Person[]
         const rows: TodoRow[] = (data.todos ?? [])
           .slice()
           .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
@@ -95,25 +115,98 @@ export default function TaskModal({
             projectId: t.project_id,
             assigneeIds: (t.todo_assignees ?? []).map((x) => x.person_id),
           }))
+        const dt = data.task_date ?? todayStr()
+        const dec = data.decisions ?? ''
+        setTitle(data.title ?? '')
+        setTaskDate(dt)
+        setDecisions(dec)
+        setIsMisc(!!data.is_misc)
+        setMembers(mem)
         setTodos(rows)
         originalTodoIds.current = rows.map((r) => r.id!).filter(Boolean)
+        initialSnapRef.current = snapshotOf(data.title ?? '', dt, dec, mem, rows)
       }
     } else {
-      setTitle('')
-      setTaskDate(todayStr())
-      setDecisions('')
-      setIsMisc(false)
       const { data: pm } = await supabase
         .from('project_members')
         .select('people(id,name)')
         .eq('project_id', projectId)
-      setMembers(
-        ((pm as unknown as { people: Person }[] | null) ?? []).map((m) => m.people).filter(Boolean),
-      )
+      const mem = ((pm as unknown as { people: Person }[] | null) ?? [])
+        .map((m) => m.people)
+        .filter(Boolean)
+      const today = todayStr()
+      setTitle('')
+      setTaskDate(today)
+      setDecisions('')
+      setIsMisc(false)
+      setMembers(mem)
       setTodos([])
       originalTodoIds.current = []
+      initialSnapRef.current = snapshotOf('', today, '', mem, [])
     }
   }
+
+  // ---- 닫기(가드) / ESC / Ctrl+B ----
+  const isDirty = () => snapshotOf(title, taskDate, decisions, members, todos) !== initialSnapRef.current
+
+  function requestClose() {
+    if (isDirty() && !confirm('작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?')) return
+    onClose()
+  }
+
+  // 선택 영역을 **볼드**로 토글 (마크다운). 리치 에디터 미도입.
+  function handleDecisionsKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return
+    e.preventDefault()
+    const ta = e.currentTarget
+    const s = ta.selectionStart
+    const en = ta.selectionEnd
+    const v = decisions
+    if (s === en) {
+      const nv = v.slice(0, s) + '****' + v.slice(s)
+      pendingSel.current = [s + 2, s + 2]
+      setDecisions(nv)
+      return
+    }
+    const sel = v.slice(s, en)
+    if (sel.length >= 4 && sel.startsWith('**') && sel.endsWith('**')) {
+      const inner = sel.slice(2, -2)
+      pendingSel.current = [s, s + inner.length]
+      setDecisions(v.slice(0, s) + inner + v.slice(en))
+      return
+    }
+    if (v.slice(s - 2, s) === '**' && v.slice(en, en + 2) === '**') {
+      pendingSel.current = [s - 2, s - 2 + sel.length]
+      setDecisions(v.slice(0, s - 2) + sel + v.slice(en + 2))
+      return
+    }
+    pendingSel.current = [s + 2, s + 2 + sel.length]
+    setDecisions(v.slice(0, s) + '**' + sel + '**' + v.slice(en))
+  }
+
+  // Ctrl+B 처리 후 선택 범위 복원
+  useEffect(() => {
+    if (pendingSel.current && decisionsRef.current) {
+      const [a, b] = pendingSel.current
+      decisionsRef.current.focus()
+      decisionsRef.current.setSelectionRange(a, b)
+      pendingSel.current = null
+    }
+  }, [decisions])
+
+  // ESC → 가드 닫기
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        requestClose()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, title, taskDate, decisions, members, todos])
 
   const memberName = (id: string) => members.find((m) => m.id === id)?.name ?? '?'
   const addTodo = () =>
@@ -219,13 +312,34 @@ export default function TaskModal({
   const inputCls =
     'w-full rounded-lg border border-line-strong px-2.5 py-2 text-[13px] outline-none focus:border-primary'
 
-  return (
-    <Modal open={open} onClose={onClose} width={620}>
-      <div className="mb-0.5 text-[15px] font-bold">Task 작성</div>
-      <p className="mb-3.5 text-[11.5px] text-ink-3">
-        소속 PJT: <span className="text-ink-2">{projectName}</span> (고정)
-      </p>
+  if (!open) return null
 
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* 배경: 클릭해도 닫히지 않음(작성 중 내용 보호) */}
+      <div className="animate-overlay-in absolute inset-0 bg-[rgba(31,30,27,0.4)]" />
+
+      {/* 우측 사이드 패널 */}
+      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-[520px] max-w-[92vw] flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)]">
+        {/* 헤더 (고정) */}
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-[22px] py-3.5">
+          <div>
+            <div className="text-[15px] font-bold">Task 작성</div>
+            <p className="text-[11.5px] text-ink-3">
+              소속 PJT: <span className="text-ink-2">{projectName}</span> (고정)
+            </p>
+          </div>
+          <button
+            onClick={requestClose}
+            title="닫기"
+            className="-mr-1 rounded-md px-2 py-1 text-[18px] leading-none text-ink-3 hover:bg-hover-bg hover:text-ink-1"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 본문 (스크롤) */}
+        <div className="flex-1 overflow-y-auto px-[22px] py-4">
       <div className="mb-3 grid grid-cols-[2fr_1fr] gap-2.5">
         <div>
           <div className={labelCls}>Task명</div>
@@ -246,11 +360,16 @@ export default function TaskModal({
         <TagInput value={members} onChange={setMembers} />
       </div>
 
-      <div className={labelCls}>결정 &amp; 전달 사항</div>
+      <div className={labelCls}>
+        결정 &amp; 전달 사항 <span className="text-[10px] font-normal text-ink-3">— Ctrl+B로 굵게(**볼드**)</span>
+      </div>
       <textarea
+        ref={decisionsRef}
         value={decisions}
         onChange={(e) => setDecisions(e.target.value)}
-        className={`${inputCls} mb-3 h-16 resize-none`}
+        onKeyDown={handleDecisionsKey}
+        placeholder="선택 후 Ctrl+B → **굵게**"
+        className={`${inputCls} mb-3 h-20 resize-none`}
       />
 
       <div className={labelCls}>
@@ -326,23 +445,29 @@ export default function TaskModal({
         </button>
         <p className="mt-2 text-[10px] text-ink-3">PJT 드롭박스: 동일 구분 내 '미진행·진행중' PJT만 선택 가능</p>
       </div>
+        </div>
 
-      <div className="flex items-center justify-between border-t border-line pt-3.5">
-        {/* "기타" 상설 Task는 삭제 불가 */}
-        {isEdit && !isMisc ? (
-          <Button variant="danger" onClick={del}>
-            삭제
-          </Button>
-        ) : isMisc ? (
-          <span className="text-[10px] text-ink-3">상설 Task(기타)는 삭제할 수 없습니다.</span>
-        ) : (
-          <span />
-        )}
-        {/* 배포는 배포 탭에서 Todo 단위/Task 일괄로 처리 */}
-        <Button variant="primary" onClick={() => void persist()} disabled={saving}>
-          저장
-        </Button>
+        {/* 푸터 (고정) */}
+        <div className="flex flex-shrink-0 items-center justify-between border-t border-line px-[22px] py-3">
+          {/* "기타" 상설 Task는 삭제 불가 */}
+          {isEdit && !isMisc ? (
+            <Button variant="danger" onClick={del}>
+              삭제
+            </Button>
+          ) : isMisc ? (
+            <span className="text-[10px] text-ink-3">상설 Task(기타)는 삭제 불가</span>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button onClick={requestClose}>취소</Button>
+            {/* 배포는 배포 탭에서 Todo 단위/Task 일괄로 처리 */}
+            <Button variant="primary" onClick={() => void persist()} disabled={saving}>
+              저장
+            </Button>
+          </div>
+        </div>
       </div>
-    </Modal>
+    </div>
   )
 }

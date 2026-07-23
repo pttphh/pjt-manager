@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { renderBold } from '../lib/markdown'
 import type { TodoStatus } from '../types'
 
 interface DeployTodo {
@@ -256,7 +257,7 @@ export default function TaskDeployTab() {
                         wordBreak: 'break-word',
                       }}
                     >
-                      {t.decisions || '—'}
+                      {t.decisions ? renderBold(t.decisions) : '—'}
                     </div>
                   </div>
 
