@@ -37,8 +37,13 @@ const ALL_STATUSES: ProjectStatus[] = ['pending', 'active', 'hold', 'done']
 const DEFAULT_STATUSES: ProjectStatus[] = ['pending', 'active', 'hold']
 const LONG_PRESS = 170
 
-// 컬럼 고정 폭: 화면에 ~4개만 보이고 나머지는 가로 스크롤 (gap 14px × 3 = 42px 보정)
-const COL_STYLE = { flex: '0 0 calc((100% - 42px) / 4)' } as const
+// 칸반은 그리드로 자동 줄바꿈(가로 스크롤 없음). 화면 폭에 맞춰 한 줄에 최대한 채우고 나머지는 아래로.
+const GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+  alignItems: 'start',
+  gap: 14,
+} as const
 
 function tagColor(tag: Tag, index: number) {
   if (tag.color_bg && tag.color_fg && tag.color_bd) {
@@ -373,7 +378,7 @@ export default function ProjectManageTab() {
       {loading ? (
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
-        <div className="flex items-start gap-3.5 overflow-x-auto pb-2">
+        <div style={GRID_STYLE}>
           {tags.map((tag, i) => {
             const c = tagColor(tag, i)
             const cards = cardsForTag(tag.id)
@@ -381,11 +386,8 @@ export default function ProjectManageTab() {
               <section
                 key={tag.id}
                 data-col={tag.id}
-                style={{
-                  ...COL_STYLE,
-                  ...(dragColId === tag.id ? { outline: '2px solid #185FA5', outlineOffset: -2 } : {}),
-                }}
-                className="rounded-xl bg-sidebar-bg p-[11px]"
+                style={dragColId === tag.id ? { outline: '2px solid #185FA5', outlineOffset: -2 } : undefined}
+                className="min-w-0 rounded-xl bg-sidebar-bg p-[11px]"
               >
                 <div className="mb-[11px] flex items-center justify-between gap-1.5 px-0.5">
                   <div
@@ -419,7 +421,7 @@ export default function ProjectManageTab() {
           })}
 
           {/* 태그 없음 컬럼 */}
-          <section data-col="none" style={COL_STYLE} className="rounded-xl bg-sidebar-bg p-[11px]">
+          <section data-col="none" className="min-w-0 rounded-xl bg-sidebar-bg p-[11px]">
             <div className="mb-[11px] flex items-center gap-[7px] px-0.5">
               <span className="rounded-[5px] border border-line bg-white px-[9px] py-[2px] text-[11px] font-semibold leading-[1.35] text-ink-2 [word-break:keep-all]">
                 태그 없음
