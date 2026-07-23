@@ -30,6 +30,7 @@ export interface Project {
   link_urls?: string[] | null
   is_urgent?: boolean | null // 긴급 (migrations/007)
   is_important?: boolean | null // 중요 (migrations/007)
+  is_regular?: boolean | null // 정기 (migrations/008)
   division_id: string
   status: ProjectStatus
   start_date: string | null
@@ -95,10 +96,15 @@ export function projectColor(status: ProjectStatus, urgent?: boolean | null): Sw
   return urgent ? URGENT_STYLE : STATUS_CARD_STYLE[status]
 }
 
-/** 긴급/중요 아이콘: 긴급=🚨, 중요=💡, 둘 다=⭐ (사이드바·PJT 관리 카드 공용) */
-export function priorityIcon(urgent?: boolean | null, important?: boolean | null): string {
-  if (urgent && important) return '⭐'
-  if (urgent) return '🚨'
-  if (important) return '💡'
-  return ''
+/**
+ * 우선순위 아이콘 (사이드바·PJT 관리 카드 공용). 정기가 있으면 항상 가장 왼쪽.
+ * 정기=🔄, 긴급=🚨, 중요=💡, 긴급+중요=⭐
+ */
+export function priorityIcon(
+  urgent?: boolean | null,
+  important?: boolean | null,
+  regular?: boolean | null,
+): string {
+  const base = urgent && important ? '⭐' : urgent ? '🚨' : important ? '💡' : ''
+  return (regular ? '🔄' : '') + base
 }

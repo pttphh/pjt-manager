@@ -103,7 +103,7 @@ colors: {
 }
 ```
 - **PJT 상태색(단일 소스 = `types.STATUS_CARD_STYLE`)**: 미진행=회색(#F1F0EC/#55534E) · 진행중=파랑(#E6F1FB/#0C447C) · 보류=노랑(#FAEEDA/#633806) · 완료=초록(#E1F5EE/#085041). **긴급(is_urgent) 체크 시 상태 무관 빨강(#FCEBEB/#791F1F)** — `types.projectColor(status, urgent)` 사용. PJT 카드·세부 상태 드롭박스 등 상태색 쓰는 모든 곳 일괄.
-- 사이드바·PJT 카드 이름 앞 아이콘: `types.priorityIcon(urgent, important)` (긴급🚨·중요💡·둘다⭐) 공용.
+- 사이드바·PJT 카드 이름 앞 아이콘: `types.priorityIcon(urgent, important, regular)` 공용 — 정기🔄(항상 맨 왼쪽)·긴급🚨·중요💡·긴급+중요⭐. is_regular=migrations/008.
 - 카드 border border-gray-200 rounded-xl, 그림자 최소화. 입력 필드 흰 배경.
 
 ## 대표 쿼리 패턴

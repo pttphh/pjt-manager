@@ -16,6 +16,7 @@ interface PjtRow {
   division_id: string
   urgent: boolean
   important: boolean
+  regular: boolean
   tags: TagLink[]
   sort: number // '태그 없음' 컬럼용 정렬값
 }
@@ -27,6 +28,7 @@ interface RawProject {
   sort_order: number | null
   is_urgent?: boolean | null
   is_important?: boolean | null
+  is_regular?: boolean | null
   project_tags: { tag_id: string; sort_order: number | null }[] | null
 }
 
@@ -107,6 +109,7 @@ export default function ProjectManageTab() {
             division_id: p.division_id,
             urgent: !!p.is_urgent,
             important: !!p.is_important,
+            regular: !!p.is_regular,
             sort: p.sort_order ?? 0,
             tags: (p.project_tags ?? []).map((t) => ({ tagId: t.tag_id, sort: t.sort_order ?? 0 })),
           })),
@@ -309,7 +312,7 @@ export default function ProjectManageTab() {
         className="cursor-grab select-none rounded-lg border px-[11px] py-2.5 text-left text-[13px] font-medium leading-[1.4] transition hover:brightness-[0.97] active:cursor-grabbing"
       >
         {(() => {
-          const icon = priorityIcon(pjt.urgent, pjt.important)
+          const icon = priorityIcon(pjt.urgent, pjt.important, pjt.regular)
           return icon ? <span className="mr-1">{icon}</span> : null
         })()}
         {pjt.name}

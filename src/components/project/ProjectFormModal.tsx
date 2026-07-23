@@ -27,6 +27,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
   const [links, setLinks] = useState<string[]>([])
   const [urgent, setUrgent] = useState(false)
   const [important, setImportant] = useState(false)
+  const [regular, setRegular] = useState(false)
   const [divisionId, setDivisionId] = useState('')
   const [tagIds, setTagIds] = useState<string[]>([])
   const [members, setMembers] = useState<Person[]>([])
@@ -59,6 +60,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
     setLinks([])
     setUrgent(false)
     setImportant(false)
+    setRegular(false)
     setTagIds([])
     setMembers([])
     setStartDate('')
@@ -79,6 +81,7 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
     )
     setUrgent(!!data.is_urgent)
     setImportant(!!data.is_important)
+    setRegular(!!data.is_regular)
     setDivisionId(data.division_id ?? '')
     setStartDate(data.start_date ?? '')
     setDueDate(data.due_date ?? '')
@@ -107,7 +110,13 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
         due_date: dueDate || null,
       }
       const cleanLinks = links.map((l) => l.trim()).filter(Boolean)
-      const withLink = { ...base, link_urls: cleanLinks, is_urgent: urgent, is_important: important }
+      const withLink = {
+        ...base,
+        link_urls: cleanLinks,
+        is_urgent: urgent,
+        is_important: important,
+        is_regular: regular,
+      }
       // migrations/006·007 미적용(추가 컬럼 없음) 시에도 저장이 깨지지 않도록 폴백.
       // 읽기는 42703, 쓰기는 PGRST204(schema cache에 컬럼 없음)로 서로 다른 코드가 온다 (컬럼 무관하게 감지).
       const missingCol = (e: { code?: string; message?: string } | null) =>
@@ -193,6 +202,10 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
       />
 
       <div className="mb-2.5 flex items-center gap-4">
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-1">
+          <input type="checkbox" checked={regular} onChange={(e) => setRegular(e.target.checked)} />
+          🔄 정기
+        </label>
         <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-1">
           <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
           🚨 긴급

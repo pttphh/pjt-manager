@@ -218,8 +218,8 @@ export default function Sidebar() {
                         }`}
                       >
                         <span className="h-1 w-1 flex-shrink-0 rounded-[1px] bg-ink-4" />
-                        {priorityIcon(p.is_urgent, p.is_important) && (
-                          <span className="flex-shrink-0">{priorityIcon(p.is_urgent, p.is_important)}</span>
+                        {priorityIcon(p.is_urgent, p.is_important, p.is_regular) && (
+                          <span className="flex-shrink-0">{priorityIcon(p.is_urgent, p.is_important, p.is_regular)}</span>
                         )}
                         <span className="truncate">{p.name}</span>
                       </button>
