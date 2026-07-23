@@ -187,7 +187,7 @@ export default function ProjectDetailPage() {
       // 방어적: 기타 Task가 없으면 생성
       const { data } = await supabase
         .from('tasks')
-        .insert({ project_id: project.id, title: '기타', is_misc: true })
+        .insert({ project_id: project.id, title: `기타-${project.name}`, is_misc: true })
         .select()
         .single()
       miscId = data?.id

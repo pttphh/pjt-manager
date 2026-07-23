@@ -149,10 +149,10 @@ export default function ProjectFormModal({ open, onClose, onSaved, projectId }: 
         }
         if (res.error || !res.data) throw res.error
         pid = res.data.id
-        // "기타" 상설 Task 자동 생성 (배포 상태 없음 — 배포는 Todo 단위)
+        // "기타-{프로젝트명}" 상설 Task 자동 생성 (배포 상태 없음 — 배포는 Todo 단위)
         await supabase.from('tasks').insert({
           project_id: pid,
-          title: '기타',
+          title: `기타-${name.trim()}`,
           is_misc: true,
         })
       }
