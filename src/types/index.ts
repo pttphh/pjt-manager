@@ -72,13 +72,33 @@ export interface TodoMemo {
   created_at: string
 }
 
-// PJT 상태별 카드 색상 (디자인 임포트 기준)
-export const STATUS_CARD_STYLE: Record<
-  ProjectStatus,
-  { bg: string; fg: string; bd: string; label: string }
-> = {
-  pending: { bg: '#FAEEDA', fg: '#633806', bd: '#E0C9A6', label: '미진행' },
-  active: { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '진행중' },
-  hold: { bg: '#FCEBEB', fg: '#791F1F', bd: '#EFCFCF', label: '보류' },
-  done: { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '완료' },
+export interface Swatch4 {
+  bg: string
+  fg: string
+  bd: string
+  label: string
+}
+
+// PJT 상태별 색상 (상태색을 쓰는 모든 곳의 단일 소스)
+export const STATUS_CARD_STYLE: Record<ProjectStatus, Swatch4> = {
+  pending: { bg: '#F1F0EC', fg: '#55534E', bd: '#DAD8D2', label: '미진행' }, // 회색
+  active: { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '진행중' }, // 파랑
+  hold: { bg: '#FAEEDA', fg: '#633806', bd: '#E0C9A6', label: '보류' }, // 노랑
+  done: { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '완료' }, // 초록
+}
+
+// 긴급 표시(상태 무관 빨강). 긴급+중요도 빨강.
+export const URGENT_STYLE: Swatch4 = { bg: '#FCEBEB', fg: '#791F1F', bd: '#EFCFCF', label: '긴급' }
+
+/** PJT 카드/상태 표시 색: 긴급이면 빨강, 아니면 상태색 */
+export function projectColor(status: ProjectStatus, urgent?: boolean | null): Swatch4 {
+  return urgent ? URGENT_STYLE : STATUS_CARD_STYLE[status]
+}
+
+/** 긴급/중요 아이콘: 긴급=🚨, 중요=💡, 둘 다=⭐ (사이드바·PJT 관리 카드 공용) */
+export function priorityIcon(urgent?: boolean | null, important?: boolean | null): string {
+  if (urgent && important) return '⭐'
+  if (urgent) return '🚨'
+  if (important) return '💡'
+  return ''
 }

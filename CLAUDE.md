@@ -81,11 +81,11 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 
 ## 반드시 지킬 도메인 규칙
 1. **Todo의 project_id ≠ task의 project_id 가능.** 기본값은 Task의 PJT. 변경 허용 범위 = 동일 구분 + status가 pending/active인 PJT만.
-2. **Todo 체크 탭**: `todos.status in ('published','checked')`인 Todo만 표시 — draft 미노출, done 제거. 각 Todo 앞 **단일 상태 뱃지**: 배포(초록)=published → 체크(파랑)=checked. 상단에 구분 필터 칩(Todo의 project_id → division 기준) + **묶음 토글(Tasks/담당자)**. 묶음=Tasks면 Task 단위 아코디언(메타 `담당: …`), 묶음=담당자면 사람 단위 아코디언(메타 `PJT: …`, 담당자 없으면 '미지정' 그룹). 미진행(published) 구간과 체크됨(checked) 구간 두 구간(한 그룹이 양 구간 동시 노출 가능). 미진행 Todo는 '저장 & 체크' → 'checked' + 하단 이동(**메모는 선택, 비어 있어도 체크 가능**). 체크됨 Todo는 최신 메모(날짜만) 표시 + **'체크 해제'(→ 'published' 복귀, 메모 이력 유지)** / **'완료로 변경'(→ 'done', 화면 제거)** 두 버튼. Task의 전 Todo가 done이면 그룹도 제거.
+2. **Todo 체크 탭**: `todos.status in ('published','checked')`인 Todo만 표시 — draft 미노출, done 제거. 각 Todo 앞 **단일 상태 뱃지**: 배포(초록)=published → 체크(파랑)=checked. 상단에 구분 필터 칩(Todo의 project_id → division 기준) + **묶음 토글(Tasks/담당자)**. **보기 기준** 토글은 필터 칩 왼쪽에 배치, 3종: [Task별](Task 단위 아코디언, 메타 `담당: …`) / [나의 할 일](담당자에 `lib/config.MY_NAME` 포함 Todo만, Task 그룹핑) / [담당자별](사람 단위 아코디언, 메타 `PJT: …`, 담당자 없으면 '미지정' 그룹). 구분 필터와 함께 동작. 미진행(published) 구간과 체크됨(checked) 구간 두 구간(한 그룹이 양 구간 동시 노출 가능). 미진행 Todo는 '저장 & 체크' → 'checked' + 하단 이동(**메모는 선택, 비어 있어도 체크 가능**). 체크됨 Todo는 최신 메모(날짜만) 표시 + **'체크 해제'(→ 'published' 복귀, 메모 이력 유지)** / **'완료로 변경'(→ 'done', 화면 제거)** 두 버튼. Task의 전 Todo가 done이면 그룹도 제거.
 3. **PJT 세부화면 Todo 목록**: **todo.project_id = 이 PJT OR task.project_id = 이 PJT** 합집합(출처 PJT + 태그된 PJT 양쪽에 노출). 다른 PJT로 태그된 Todo엔 `→ 대상PJT명` 표기. 각 Todo에 🗑 삭제 버튼(확인창). 체크박스 자유 체크/해제: 체크→'done', 해제→메모 있으면 'checked', 없으면 배포됐으면 'published'·미배포면 'draft'.
 4. **메모는 누적 저장**(todo_memos insert), 화면에는 최신 1건만 표시. 날짜만 표기(시각 없음).
 5. **TaskModal은 단일 창**: 신규 등록·기존 Task 클릭 전부 동일 컴포넌트. 필드: Task명 / 날짜(기본 작성일) / 멤버(기본=PJT 멤버 전원) / 결정&전달사항 / Todo 행(내용·담당자·PJT·삭제). 담당자 = Task 멤버 중 체크박스 복수 선택. Todo 상태는 이 창에 표기하지 않고 변경 불가. **새로 추가되는 Todo는 항상 draft로 생성**(기존 Todo 상태는 건드리지 않음). 하단: 저장 + 삭제(확인창, 기타 Task는 삭제 불가)만 — **배포 버튼 없음**(배포는 배포 탭에서 Todo 단위/Task 일괄 처리).
-6. **배포 탭**: draft **또는** published Todo가 있는 Task 묶음 표시(배포해도 회색으로 남아 되돌리기 가능, **모든 Todo가 checked/done으로 넘어가야 사라짐**). 묶음 = 헤더 `Task명 (작성 M/D) — 프로젝트명`(draft 있으면 주황+'이 Task 전체 배포', 전부 배포됐으면 회색+'배포됨 n건·되돌리기 가능') + 지시사항(decisions) 미리보기 + 전체 Todo 목록(draft=정상+'배포', published=회색+'미배포로 되돌리기', checked/done=회색 표시만). 배포 시 `deployed_at=now()`, 되돌리기 시 null. PJT 세부 Tasks 목록 표기는 `YY.MM.DD Task명`.
+6. **배포 탭**: draft **또는** published Todo가 있는 Task 묶음 표시(배포해도 회색으로 남아 되돌리기 가능, **모든 Todo가 checked/done으로 넘어가야 사라짐**). 묶음 = 헤더 `Task명 (작성 M/D) — 프로젝트명`(draft 있으면 주황+'이 Task 전체 배포', 전부 배포됐으면 회색+'배포됨 n건·되돌리기 가능') + 지시사항(decisions) 미리보기 + 전체 Todo 목록(draft=정상+'배포', published=회색+'미배포로 되돌리기', checked/done=회색 표시만). 각 Task 헤더 좌측 ▶/▼로 접기/펼치기(헤더 클릭 토글, '전체 배포' 버튼은 stopPropagation). 배포 시 `deployed_at=now()`, 되돌리기 시 null. PJT 세부 Tasks 목록 표기는 `YY.MM.DD Task명`.
 7. **PJT 관리 탭**: 태그별 컬럼(고정폭 ~4개 노출, 나머지 가로 스크롤), PJT명 카드. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 카드 이름 앞에 우선순위 아이콘(긴급🚨/중요💡/둘다⭐). 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
 8. **PJT 등록 시 "기타" Task 자동 생성**: is_misc=true. 특별 취급 없음 — 기타 Task의 Todo도 draft로 생성되어 같은 배포 절차를 탄다(단, 기타 Task 자체는 삭제 불가).
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
@@ -102,8 +102,8 @@ colors: {
   'sidebar-bg': '#F5F4F0',
 }
 ```
-- PJT 카드: pending=warning-light / active=primary-light / hold=danger-light
-- Task 미배포=warning 계열, 배포됨=success 계열
+- **PJT 상태색(단일 소스 = `types.STATUS_CARD_STYLE`)**: 미진행=회색(#F1F0EC/#55534E) · 진행중=파랑(#E6F1FB/#0C447C) · 보류=노랑(#FAEEDA/#633806) · 완료=초록(#E1F5EE/#085041). **긴급(is_urgent) 체크 시 상태 무관 빨강(#FCEBEB/#791F1F)** — `types.projectColor(status, urgent)` 사용. PJT 카드·세부 상태 드롭박스 등 상태색 쓰는 모든 곳 일괄.
+- 사이드바·PJT 카드 이름 앞 아이콘: `types.priorityIcon(urgent, important)` (긴급🚨·중요💡·둘다⭐) 공용.
 - 카드 border border-gray-200 rounded-xl, 그림자 최소화. 입력 필드 흰 배경.
 
 ## 대표 쿼리 패턴

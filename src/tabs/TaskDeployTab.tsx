@@ -67,6 +67,8 @@ export default function TaskDeployTab() {
   const [tasks, setTasks] = useState<DeployTask[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}) // Task 접기/펼치기
+  const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
 
   useEffect(() => {
     void load()
@@ -192,6 +194,7 @@ export default function TaskDeployTab() {
               const draftCount = t.todos.filter((td) => td.status === 'draft').length
               const hasDraft = draftCount > 0
               const publishedCount = t.todos.filter((td) => td.status === 'published').length
+              const isCollapsed = !!collapsed[t.id]
               return (
                 <div
                   key={t.id}
@@ -201,8 +204,10 @@ export default function TaskDeployTab() {
                     overflow: 'hidden',
                   }}
                 >
-                  {/* Task 헤더 — draft 있으면 주황(미배포), 전부 배포됐으면 회색 */}
+                  {/* Task 헤더 — 클릭 시 접기/펼치기 (배포 버튼은 stopPropagation) */}
                   <div
+                    onClick={() => toggleCollapse(t.id)}
+                    title={isCollapsed ? '펼치기' : '접기'}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -210,12 +215,23 @@ export default function TaskDeployTab() {
                       gap: 12,
                       background: hasDraft ? '#FAEEDA' : '#F5F4F0',
                       padding: '10px 13px',
+                      cursor: 'pointer',
                     }}
                   >
                     <span
                       className="min-w-0 truncate text-[13px]"
                       style={{ color: hasDraft ? '#633806' : '#1F1E1B' }}
                     >
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 14,
+                          fontSize: '10px',
+                          color: hasDraft ? '#633806' : '#8A877F',
+                        }}
+                      >
+                        {isCollapsed ? '▶' : '▼'}
+                      </span>
                       <span style={{ fontWeight: 600 }}>{t.title}</span>
                       <span style={{ opacity: 0.75, color: hasDraft ? undefined : '#8A877F' }}>
                         {' '}
@@ -226,7 +242,14 @@ export default function TaskDeployTab() {
                       {hasDraft ? (
                         <>
                           <span style={{ fontSize: '11.5px', color: '#633806' }}>미배포 {draftCount}건</span>
-                          <button style={smallBtn('deploy')} disabled={busy} onClick={() => deployTask(t.id)}>
+                          <button
+                            style={smallBtn('deploy')}
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deployTask(t.id)
+                            }}
+                          >
                             이 Task 전체 배포
                           </button>
                         </>
@@ -238,6 +261,8 @@ export default function TaskDeployTab() {
                     </span>
                   </div>
 
+                  {!isCollapsed && (
+                  <>
                   {/* 멤버 */}
                   <div style={{ background: '#fff', padding: '10px 13px' }}>
                     <div style={SEC_LABEL}>멤버</div>
@@ -309,6 +334,8 @@ export default function TaskDeployTab() {
                       )
                     })}
                   </div>
+                  </>
+                  )}
                 </div>
               )
             })}

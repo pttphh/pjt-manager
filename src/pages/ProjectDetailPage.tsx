@@ -6,14 +6,10 @@ import TaskModal from '../components/task/TaskModal'
 import { supabase } from '../lib/supabase'
 import { emitDataChanged } from '../lib/events'
 import { tagSwatch } from '../lib/colors'
+import { STATUS_CARD_STYLE, projectColor } from '../types'
 import type { Person, ProjectStatus, Tag, Task, TodoStatus } from '../types'
 
-const STATUS_META: Record<ProjectStatus, { label: string; bg: string; fg: string; bd: string }> = {
-  pending: { label: '미진행', bg: '#FAEEDA', fg: '#633806', bd: '#E0C9A6' },
-  active: { label: '진행중', bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF' },
-  hold: { label: '보류', bg: '#FCEBEB', fg: '#791F1F', bd: '#EFCFCF' },
-  done: { label: '완료', bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3' },
-}
+const STATUS_META = STATUS_CARD_STYLE // 상태 라벨/색 단일 소스
 const DIVISION_BADGE = { bg: '#FAEEDA', fg: '#633806', bd: '#E0C9A6' }
 
 interface DetailProject {
@@ -22,6 +18,8 @@ interface DetailProject {
   description: string | null
   link_url?: string | null
   link_urls?: string[] | null
+  is_urgent?: boolean | null
+  is_important?: boolean | null
   division_id: string
   status: ProjectStatus
   start_date: string | null
@@ -228,7 +226,8 @@ export default function ProjectDetailPage() {
     )
   }
 
-  const sm = STATUS_META[project.status]
+  // 긴급이면 상태 무관 빨강 (드롭박스도 동일)
+  const sm = projectColor(project.status, project.is_urgent)
   const tags = (project.project_tags ?? []).map((pt) => pt.tags).filter(Boolean)
   const members = (project.project_members ?? []).map((pm) => pm.people).filter(Boolean)
   const projectLinks =

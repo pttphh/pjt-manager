@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { MY_NAME } from '../lib/config'
 import type { Division } from '../types'
 
-type ViewMode = 'task' | 'person'
+type ViewMode = 'task' | 'mine' | 'person'
 // 이 탭에 노출되는 Todo 상태: published(미진행 구간) | checked(체크됨 구간). draft 미노출, done 제거.
 type ShownStatus = 'published' | 'checked'
 
@@ -159,9 +160,11 @@ export default function TodoCheckTab() {
   }
 
   function buildGroups(status: ShownStatus): Group[] {
-    const filtered = items.filter(
+    let filtered = items.filter(
       (it) => it.status === status && (filter === 'all' || it.divisionId === filter),
     )
+    // '나의 할 일': 담당자에 MY_NAME 이 포함된 Todo만 (그 외엔 Task별 그룹핑과 동일)
+    if (view === 'mine') filtered = filtered.filter((it) => it.assignees.includes(MY_NAME))
     if (view === 'person') {
       const people: string[] = []
       filtered.forEach((it) => it.assignees.forEach((p) => !people.includes(p) && people.push(p)))
@@ -245,8 +248,22 @@ export default function TodoCheckTab() {
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
         <>
-          {/* 상단: 구분 필터 칩 + 묶음 토글 */}
-          <div className="mb-5 flex items-center justify-between gap-2.5">
+          {/* 상단: [보기 기준 선택] → [구분 필터 칩] (좌→우) */}
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex flex-shrink-0 items-center gap-[7px]">
+              <span style={{ fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>보기 기준</span>
+              <div style={{ display: 'flex', border: '1px solid #CFCDC7', borderRadius: 8, overflow: 'hidden' }}>
+                <button style={seg(view === 'task', false)} onClick={() => setView('task')}>
+                  Task별
+                </button>
+                <button style={seg(view === 'mine', true)} onClick={() => setView('mine')}>
+                  나의 할 일
+                </button>
+                <button style={seg(view === 'person', true)} onClick={() => setView('person')}>
+                  담당자별
+                </button>
+              </div>
+            </div>
             <div className="flex min-w-0 flex-wrap gap-1.5">
               <button style={chip(filter === 'all')} onClick={() => setFilter('all')}>
                 전체
@@ -256,17 +273,6 @@ export default function TodoCheckTab() {
                   {d.name}
                 </button>
               ))}
-            </div>
-            <div className="flex flex-shrink-0 items-center gap-[7px]">
-              <span style={{ fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>묶음</span>
-              <div style={{ display: 'flex', border: '1px solid #CFCDC7', borderRadius: 8, overflow: 'hidden' }}>
-                <button style={seg(view === 'task', false)} onClick={() => setView('task')}>
-                  Tasks
-                </button>
-                <button style={seg(view === 'person', true)} onClick={() => setView('person')}>
-                  담당자
-                </button>
-              </div>
             </div>
           </div>
 

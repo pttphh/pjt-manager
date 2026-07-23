@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DATA_CHANGED } from '../../lib/events'
+import { priorityIcon } from '../../types'
 import type { Division, Project } from '../../types'
 
 const SIDEBAR_KEY = 'pm_sidebar_w'
@@ -217,7 +218,10 @@ export default function Sidebar() {
                         }`}
                       >
                         <span className="h-1 w-1 flex-shrink-0 rounded-[1px] bg-ink-4" />
-                        {p.name}
+                        {priorityIcon(p.is_urgent, p.is_important) && (
+                          <span className="flex-shrink-0">{priorityIcon(p.is_urgent, p.is_important)}</span>
+                        )}
+                        <span className="truncate">{p.name}</span>
                       </button>
                     ))}
                   </div>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { TAG_SWATCHES, tagSwatch } from '../lib/colors'
-import { STATUS_CARD_STYLE } from '../types'
+import { STATUS_CARD_STYLE, projectColor, priorityIcon } from '../types'
 import type { ProjectStatus, Tag } from '../types'
 
 interface TagLink {
@@ -37,14 +37,6 @@ const LONG_PRESS = 170
 
 // 컬럼 고정 폭: 화면에 ~4개만 보이고 나머지는 가로 스크롤 (gap 14px × 3 = 42px 보정)
 const COL_STYLE = { flex: '0 0 calc((100% - 42px) / 4)' } as const
-
-// 긴급/중요 아이콘: 긴급=🚨, 중요=💡, 둘 다=⭐
-function priorityIcon(urgent: boolean, important: boolean): string {
-  if (urgent && important) return '⭐'
-  if (urgent) return '🚨'
-  if (important) return '💡'
-  return ''
-}
 
 function tagColor(tag: Tag, index: number) {
   if (tag.color_bg && tag.color_fg && tag.color_bd) {
@@ -292,7 +284,7 @@ export default function ProjectManageTab() {
   }
 
   function Card({ pjt, col }: { pjt: PjtRow; col: string }) {
-    const s = STATUS_CARD_STYLE[pjt.status] ?? STATUS_CARD_STYLE.pending
+    const s = projectColor(pjt.status, pjt.urgent)
     const dragging = dragCard?.col === col && dragCard?.id === pjt.id
     return (
       <button

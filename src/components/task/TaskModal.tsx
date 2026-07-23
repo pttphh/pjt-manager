@@ -213,7 +213,17 @@ export default function TaskModal({
     setTodos((ts) => [...ts, { key: crypto.randomUUID(), title: '', assigneeIds: [], projectId }])
   const patchTodo = (key: string, patch: Partial<TodoRow>) =>
     setTodos((ts) => ts.map((t) => (t.key === key ? { ...t, ...patch } : t)))
-  const removeTodo = (key: string) => setTodos((ts) => ts.filter((t) => t.key !== key))
+  async function removeTodo(key: string) {
+    const row = todos.find((t) => t.key === key)
+    // 이미 저장된 Todo면 확인 후 DB에서 즉시 삭제 (todo_assignees·todo_memos 는 FK on delete cascade)
+    if (row?.id) {
+      if (!confirm('저장된 Todo입니다. 삭제하시겠습니까?\n담당자·메모도 함께 삭제됩니다.')) return
+      await supabase.from('todos').delete().eq('id', row.id)
+      originalTodoIds.current = originalTodoIds.current.filter((id) => id !== row.id)
+    }
+    // 새로 추가한(미저장) 행이면 그냥 목록에서 제거
+    setTodos((ts) => ts.filter((t) => t.key !== key))
+  }
   const toggleAssignee = (key: string, pid: string) =>
     setTodos((ts) =>
       ts.map((t) =>
@@ -432,7 +442,7 @@ export default function TaskModal({
                 </option>
               ))}
             </select>
-            <button onClick={() => removeTodo(t.key)} className="text-ink-3 hover:text-danger" title="삭제">
+            <button onClick={() => void removeTodo(t.key)} className="text-ink-3 hover:text-danger" title="Todo 삭제">
               🗑
             </button>
           </div>
