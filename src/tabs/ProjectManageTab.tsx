@@ -73,8 +73,10 @@ export default function ProjectManageTab() {
   // 비동기 저장 시 최신값을 읽기 위한 미러 ref
   const tagsRef = useRef<Tag[]>([])
   const projRef = useRef<PjtRow[]>([])
+  const dragCardRef = useRef<{ col: string; id: string } | null>(null)
   tagsRef.current = tags
   projRef.current = projects
+  dragCardRef.current = dragCard
   const holdTimer = useRef<ReturnType<typeof setTimeout>>()
   // 드래그(길게 누름)로 시작된 상호작용이면 뒤따르는 click 을 억제 (카드가 상세로 튀는 것 방지)
   const didDragRef = useRef(false)
@@ -205,7 +207,8 @@ export default function ProjectManageTab() {
     document.removeEventListener('pointermove', onCardMove)
     document.removeEventListener('pointerup', endCardDrag)
     document.body.style.userSelect = ''
-    const col = dragCard?.col
+    // stale 클로저 방지: 최신 dragCard 를 ref 에서 읽는다
+    const col = dragCardRef.current?.col
     setDragCard(null)
     if (col) void persistCardOrder(col)
   }
