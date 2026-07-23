@@ -34,6 +34,7 @@ function snapshotOf(
   title: string,
   taskDate: string,
   decisions: string,
+  links: string[],
   members: Person[],
   todos: TodoRow[],
 ): string {
@@ -41,6 +42,7 @@ function snapshotOf(
     title: title.trim(),
     taskDate,
     decisions,
+    links: links.map((l) => l.trim()).filter(Boolean),
     members: members.map((m) => m.id).sort(),
     todos: todos.map((t) => ({
       id: t.id ?? null,
@@ -64,6 +66,7 @@ export default function TaskModal({
   const [title, setTitle] = useState('')
   const [taskDate, setTaskDate] = useState(todayStr())
   const [decisions, setDecisions] = useState('')
+  const [links, setLinks] = useState<string[]>([])
   const [members, setMembers] = useState<Person[]>([])
   const [todos, setTodos] = useState<TodoRow[]>([])
   const [isMisc, setIsMisc] = useState(false)
@@ -117,14 +120,16 @@ export default function TaskModal({
           }))
         const dt = data.task_date ?? todayStr()
         const dec = data.decisions ?? ''
+        const lks = (data.link_urls as string[] | null) ?? []
         setTitle(data.title ?? '')
         setTaskDate(dt)
         setDecisions(dec)
+        setLinks(lks)
         setIsMisc(!!data.is_misc)
         setMembers(mem)
         setTodos(rows)
         originalTodoIds.current = rows.map((r) => r.id!).filter(Boolean)
-        initialSnapRef.current = snapshotOf(data.title ?? '', dt, dec, mem, rows)
+        initialSnapRef.current = snapshotOf(data.title ?? '', dt, dec, lks, mem, rows)
       }
     } else {
       const { data: pm } = await supabase
@@ -138,16 +143,18 @@ export default function TaskModal({
       setTitle('')
       setTaskDate(today)
       setDecisions('')
+      setLinks([])
       setIsMisc(false)
       setMembers(mem)
       setTodos([])
       originalTodoIds.current = []
-      initialSnapRef.current = snapshotOf('', today, '', mem, [])
+      initialSnapRef.current = snapshotOf('', today, '', [], mem, [])
     }
   }
 
   // ---- 닫기(가드) / ESC / Ctrl+B ----
-  const isDirty = () => snapshotOf(title, taskDate, decisions, members, todos) !== initialSnapRef.current
+  const isDirty = () =>
+    snapshotOf(title, taskDate, decisions, links, members, todos) !== initialSnapRef.current
 
   function requestClose() {
     if (isDirty() && !confirm('작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?')) return
@@ -206,7 +213,7 @@ export default function TaskModal({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, title, taskDate, decisions, members, todos])
+  }, [open, title, taskDate, decisions, links, members, todos])
 
   const memberName = (id: string) => members.find((m) => m.id === id)?.name ?? '?'
   const addTodo = () =>
@@ -247,22 +254,40 @@ export default function TaskModal({
     try {
       let tid = taskId as string | undefined
       // Task는 배포 상태를 갖지 않는다 (배포는 배포 탭에서 Todo 단위로 처리)
-      const payload = {
+      const base = {
         project_id: projectId,
         title: title.trim(),
         task_date: taskDate,
         decisions: decisions.trim() || null,
       }
+      const payload = { ...base, link_urls: links.map((l) => l.trim()).filter(Boolean) }
+      // migrations/009(link_urls) 미적용 시에도 저장이 깨지지 않도록 폴백 (PGRST204=schema cache에 컬럼 없음)
+      const missingCol = (e: { code?: string } | null) =>
+        !!e && (e.code === 'PGRST204' || e.code === '42703')
+
       if (isEdit) {
-        await supabase.from('tasks').update(payload).eq('id', taskId)
+        let { error } = await supabase.from('tasks').update(payload).eq('id', taskId)
+        if (missingCol(error)) {
+          ;({ error } = await supabase.from('tasks').update(base).eq('id', taskId))
+          alert('링크가 저장되지 않았습니다. 최신 마이그레이션(009)을 적용하세요.')
+        }
+        if (error) throw error
       } else {
-        const { data, error } = await supabase
+        let res = await supabase
           .from('tasks')
           .insert({ ...payload, is_misc: false })
           .select()
           .single()
-        if (error || !data) throw error
-        tid = data.id
+        if (missingCol(res.error)) {
+          res = await supabase
+            .from('tasks')
+            .insert({ ...base, is_misc: false })
+            .select()
+            .single()
+          alert('링크가 저장되지 않았습니다. 최신 마이그레이션(009)을 적용하세요.')
+        }
+        if (res.error || !res.data) throw res.error
+        tid = res.data.id
       }
 
       // Task 멤버 교체
@@ -381,6 +406,36 @@ export default function TaskModal({
         placeholder="선택 후 Ctrl+B → **굵게**"
         className={`${inputCls} mb-3 h-20 resize-none`}
       />
+
+      <div className={labelCls}>
+        링크 <span className="text-[10px] font-normal text-ink-3">— 선택, 여러 개 가능 · 새 창으로 열림</span>
+      </div>
+      <div className="mb-3 flex flex-col gap-1.5">
+        {links.map((l, i) => (
+          <div key={i} className="flex gap-1.5">
+            <input
+              type="url"
+              value={l}
+              onChange={(e) => setLinks((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
+              placeholder="https://example.com/…"
+              className={`${inputCls} flex-1`}
+            />
+            <button
+              onClick={() => setLinks((prev) => prev.filter((_, j) => j !== i))}
+              title="링크 삭제"
+              className="flex-shrink-0 rounded-lg border border-line-strong px-2.5 text-ink-3 hover:text-danger"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => setLinks((prev) => [...prev, ''])}
+          className="rounded-lg border border-dashed border-line-strong py-1.5 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
+        >
+          + 링크 추가
+        </button>
+      </div>
 
       <div className={labelCls}>
         Todo <span className="text-[10px] text-ink-3">— 상태 표기·변경 없음</span>

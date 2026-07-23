@@ -48,6 +48,7 @@ export interface Task {
   title: string
   task_date: string
   decisions: string | null
+  link_urls?: string[] | null // 관련 온라인 주소 여러 개 (migrations/009). 세부화면 Tasks 목록에서 새 창으로 열림
   is_misc: boolean
   projects?: Project
   task_members?: { people: Person }[]

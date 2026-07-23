@@ -359,17 +359,40 @@ export default function ProjectDetailPage() {
               + 신규 Task 등록
             </button>
             <div className="flex flex-col gap-1.5">
-              {tasks.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTaskModal({ open: true, taskId: t.id })}
-                  className="rounded-lg border border-line-strong bg-white px-3 py-2 text-left text-[12.5px] hover:bg-sidebar-bg"
-                >
-                  <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
-                  <span className="text-ink-1">{t.title}</span>
-                  {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
-                </button>
-              ))}
+              {tasks.map((t) => {
+                const taskLinks = (t.link_urls ?? []).filter(Boolean)
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-2 rounded-lg border border-line-strong bg-white px-3 py-2 hover:bg-sidebar-bg"
+                  >
+                    <button
+                      onClick={() => setTaskModal({ open: true, taskId: t.id })}
+                      className="min-w-0 flex-1 text-left text-[12.5px]"
+                    >
+                      <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
+                      <span className="text-ink-1">{t.title}</span>
+                      {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
+                    </button>
+                    {taskLinks.length > 0 && (
+                      <span className="flex flex-shrink-0 items-center gap-1.5">
+                        {taskLinks.map((u, i) => (
+                          <a
+                            key={i}
+                            href={toHref(u)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={u}
+                            className="text-[13px] leading-none text-primary hover:underline"
+                          >
+                            ↗
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </section>
 
