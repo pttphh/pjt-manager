@@ -19,6 +19,7 @@ interface TodoItem {
   divisionId: string
   assignees: string[]
   latestMemo: { content: string; date: string } | null
+  memos: { content: string; date: string }[] // 최신순
 }
 interface RawTask {
   id: string
@@ -83,8 +84,21 @@ export default function TodoCheckTab() {
   const [filter, setFilter] = useState<string>('all') // division id | 'all'
   const [view, setView] = useState<ViewMode>('task')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [memoInputs, setMemoInputs] = useState<Record<string, string>>({})
-  const savingRef = useRef<Set<string>>(new Set()) // 저장&체크 연타 방지
+  // 미진행 Todo별 메모 입력 여러 칸 (기본 1칸). + 버튼으로 칸 추가, 저장 시 비지 않은 칸 모두 누적 저장.
+  const [memoInputs, setMemoInputs] = useState<Record<string, string[]>>({})
+  const savingRef = useRef<Set<string>>(new Set()) // 저장/체크 연타 방지
+
+  const fieldsOf = (id: string) => memoInputs[id] ?? ['']
+  function setMemoAt(id: string, idx: number, value: string) {
+    setMemoInputs((m) => {
+      const arr = (m[id] ?? ['']).slice()
+      arr[idx] = value
+      return { ...m, [id]: arr }
+    })
+  }
+  function addMemoField(id: string) {
+    setMemoInputs((m) => ({ ...m, [id]: [...(m[id] ?? ['']), ''] }))
+  }
 
   useEffect(() => {
     void load()
@@ -123,6 +137,7 @@ export default function TodoCheckTab() {
             divisionId: td.projects?.division_id ?? '',
             assignees: (td.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
             latestMemo: memos[0] ? { content: memos[0].content, date: md(memos[0].created_at) } : null,
+            memos: memos.map((m) => ({ content: m.content, date: md(m.created_at) })),
           })
         }
       }
@@ -134,16 +149,35 @@ export default function TodoCheckTab() {
     }
   }
 
-  async function saveMemo(todoId: string) {
-    // 연타로 메모가 중복 저장되는 것 방지
+  // 비어 있지 않은 입력 칸들을 누적 저장. 상태는 그대로 published 유지.
+  async function saveMemos(todoId: string) {
+    if (savingRef.current.has(todoId)) return
+    const rows = fieldsOf(todoId)
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .map((content) => ({ todo_id: todoId, content }))
+    if (rows.length === 0) return
+    savingRef.current.add(todoId)
+    try {
+      await supabase.from('todo_memos').insert(rows)
+      setMemoInputs((m) => ({ ...m, [todoId]: [''] }))
+      void load()
+    } finally {
+      savingRef.current.delete(todoId)
+    }
+  }
+  // 체크(상태 변경) — 저장과 분리. 입력 중이던 메모가 있으면 데이터 손실 방지 위해 함께 저장.
+  async function checkTodo(todoId: string) {
     if (savingRef.current.has(todoId)) return
     savingRef.current.add(todoId)
     try {
-      // 메모는 선택 — 비어 있어도 '저장 & 체크'만으로 체크로 이동 (배포/미배포 무관)
-      const content = (memoInputs[todoId] ?? '').trim()
-      if (content) await supabase.from('todo_memos').insert({ todo_id: todoId, content })
+      const rows = fieldsOf(todoId)
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .map((content) => ({ todo_id: todoId, content }))
+      if (rows.length > 0) await supabase.from('todo_memos').insert(rows)
       await supabase.from('todos').update({ status: 'checked' }).eq('id', todoId)
-      setMemoInputs((m) => ({ ...m, [todoId]: '' }))
+      setMemoInputs((m) => ({ ...m, [todoId]: [''] }))
       void load()
     } finally {
       savingRef.current.delete(todoId)
@@ -326,20 +360,51 @@ export default function TodoCheckTab() {
                             {td.metaLabel}: {td.metaValue}
                           </span>
                         </div>
-                        <div className="flex gap-1.5 pl-[22px]">
-                          <input
-                            value={memoInputs[td.id] ?? ''}
-                            onChange={(e) => setMemoInputs((m) => ({ ...m, [td.id]: e.target.value }))}
-                            onKeyDown={(e) => e.key === 'Enter' && saveMemo(td.id)}
-                            placeholder="진행사항 메모 입력…"
-                            style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', border: '1px solid #CFCDC7', borderRadius: 8, padding: '7px 10px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1F1E1B' }}
-                          />
-                          <button
-                            onClick={() => saveMemo(td.id)}
-                            style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '0 14px' }}
-                          >
-                            저장 &amp; 체크
-                          </button>
+                        {td.memos.length > 0 && (
+                          <div className="mb-[7px] pl-[22px]" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {td.memos.map((mo, i) => (
+                              <div key={i} style={{ fontSize: '11.5px', color: '#8A877F', lineHeight: 1.4 }}>
+                                <span style={{ color: '#B4B1A9', marginRight: 6 }}>{mo.date}</span>
+                                {mo.content}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="pl-[22px]" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {fieldsOf(td.id).map((val, idx) => (
+                            <div key={idx} className="flex gap-1.5">
+                              <input
+                                value={val}
+                                onChange={(e) => setMemoAt(td.id, idx, e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && saveMemos(td.id)}
+                                placeholder={idx === 0 ? '진행사항 메모 입력…' : '메모 추가…'}
+                                style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', border: '1px solid #CFCDC7', borderRadius: 8, padding: '7px 10px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1F1E1B' }}
+                              />
+                              {idx === fieldsOf(td.id).length - 1 && (
+                                <button
+                                  onClick={() => addMemoField(td.id)}
+                                  title="메모 칸 추가"
+                                  style={{ flex: '0 0 auto', width: 34, border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '16px', fontWeight: 600, borderRadius: 8, lineHeight: 1 }}
+                                >
+                                  +
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <div className="flex gap-1.5 justify-end">
+                            <button
+                              onClick={() => saveMemos(td.id)}
+                              style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 16px' }}
+                            >
+                              저장
+                            </button>
+                            <button
+                              onClick={() => checkTodo(td.id)}
+                              style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #185FA5', background: '#185FA5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 18px' }}
+                            >
+                              체크
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
