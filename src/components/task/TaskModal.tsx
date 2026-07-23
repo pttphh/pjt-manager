@@ -330,7 +330,7 @@ export default function TaskModal({
       <div className="animate-overlay-in absolute inset-0 bg-[rgba(31,30,27,0.4)]" />
 
       {/* 우측 사이드 패널 */}
-      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-[520px] max-w-[92vw] flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)]">
+      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-[680px] max-w-[94vw] flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)]">
         {/* 헤더 (고정) */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-[22px] py-3.5">
           <div>
@@ -386,19 +386,19 @@ export default function TaskModal({
         Todo <span className="text-[10px] text-ink-3">— 상태 표기·변경 없음</span>
       </div>
       <div className="mb-3.5 rounded-lg border border-line p-2.5">
-        <div className="mb-1 grid grid-cols-[3fr_130px_150px_24px] gap-2 px-0.5 text-[10px] text-ink-3">
+        <div className="mb-1 grid grid-cols-[minmax(0,3fr)_140px_160px_30px] gap-2 px-0.5 text-[10px] text-ink-3">
           <span>내용</span>
           <span>담당자 (멤버 중 복수)</span>
           <span>PJT</span>
           <span />
         </div>
         {todos.map((t) => (
-          <div key={t.key} className="mb-1.5 grid grid-cols-[3fr_130px_150px_24px] items-center gap-2">
+          <div key={t.key} className="mb-1.5 grid grid-cols-[minmax(0,3fr)_140px_160px_30px] items-center gap-2">
             <input
               value={t.title}
               onChange={(e) => patchTodo(t.key, { title: e.target.value })}
               placeholder="할 일 내용"
-              className="rounded-lg border border-line-strong px-2 py-1.5 text-[12px] outline-none focus:border-primary"
+              className="min-w-0 rounded-lg border border-line-strong px-2 py-1.5 text-[12px] outline-none focus:border-primary"
             />
             <div className="relative">
               <button
@@ -442,7 +442,11 @@ export default function TaskModal({
                 </option>
               ))}
             </select>
-            <button onClick={() => void removeTodo(t.key)} className="text-ink-3 hover:text-danger" title="Todo 삭제">
+            <button
+              onClick={() => void removeTodo(t.key)}
+              title="Todo 삭제"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[13px] text-ink-3 hover:bg-danger-light hover:text-danger"
+            >
               🗑
             </button>
           </div>
