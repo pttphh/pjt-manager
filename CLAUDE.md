@@ -38,7 +38,7 @@ src/
     ui/       Badge.tsx Button.tsx Modal.tsx TagInput.tsx
               ItemManager.tsx  -- 구분·태그·멤버 목록/수정/삭제/추가 공용 (설정 3탭 + ⚙ 팝업)
               InlineManage.tsx -- ItemManager를 감싼 ⚙ 인라인 팝업 껍데기
-    task/     TaskModal.tsx          -- 우측 사이드 패널(drawer). 바깥클릭 닫힘 없음(dirty면 확인창), X·취소만. decisions Ctrl+B 볼드
+    task/     TaskModal.tsx          -- 우측 사이드 패널(drawer, ≥lg 680px). 분할·좁은 화면(<lg)에선 전체화면(w-full). 바깥클릭 닫힘 없음(dirty면 확인창), X·취소만. decisions Ctrl+B 볼드
     project/  ProjectFormModal.tsx   -- PJT 등록/편집 (⚙ 인라인 구분·태그 관리 포함)
   pages/      PasswordPage.tsx MainPage.tsx ProjectDetailPage.tsx SettingsPage.tsx
   tabs/       TodoCheckTab.tsx TaskDeployTab.tsx ProjectManageTab.tsx
@@ -91,7 +91,7 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 8. **PJT 등록 시 "기타-{프로젝트명}" Task 자동 생성**: is_misc=true (미스 Task 식별은 title이 아니라 `is_misc` 플래그로만 판별). 특별 취급 없음 — 기타 Task의 Todo도 draft로 생성되어 같은 배포 절차를 탄다(단, 기타 Task 자체는 삭제 불가).
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
 10. **삭제**: PJT·Task 모두 삭제 가능, cascade(스키마에 정의됨), 반드시 확인창.
-11. **PC 전용.** 반응형 작업하지 않는다.
+11. **PC 전용.** 반응형 작업하지 않는다. (예외: TaskModal drawer만 분할·좁은 화면<lg에서 전체화면으로 전환 — 규칙5.)
 
 ## Tailwind 색상 토큰
 ```ts

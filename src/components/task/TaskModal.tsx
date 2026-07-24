@@ -354,8 +354,10 @@ export default function TaskModal({
       {/* 배경: 클릭해도 닫히지 않음(작성 중 내용 보호) */}
       <div className="animate-overlay-in absolute inset-0 bg-[rgba(31,30,27,0.4)]" />
 
-      {/* 우측 사이드 패널 */}
-      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-[680px] max-w-[94vw] flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)]">
+      {/* 넓은 화면(≥lg): 우측 사이드 패널(680px). 분할·좁은 화면(<lg): 전체화면.
+          full-screen 폭은 w-full(고정 부모 100%)로 잡아야 함 — 100vw는 #root zoom(1.15)에 부풀려져 오버플로우한다.
+          lg 폭 상한도 같은 이유로 zoom 배율만큼 보정. */}
+      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)] lg:w-[680px] lg:max-w-[calc(94vw/var(--app-zoom))]">
         {/* 헤더 (고정) */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-[22px] py-3.5">
           <div>
