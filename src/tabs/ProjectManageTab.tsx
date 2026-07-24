@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { TAG_SWATCHES, tagSwatch } from '../lib/colors'
-import { STATUS_CARD_STYLE, projectColor, priorityIcon, PRIORITY_ICON_COLOR } from '../types'
+import { STATUS_CARD_STYLE, projectColor, priorityIcon } from '../types'
 import type { ProjectStatus, Tag } from '../types'
 
 interface TagLink {
@@ -318,12 +318,7 @@ export default function ProjectManageTab() {
       >
         {(() => {
           const icon = priorityIcon(pjt.urgent, pjt.important, pjt.regular)
-          // color는 텍스트 글리프 ★에만 적용된다 (🔄🚨💡 이모지는 영향 없음)
-          return icon ? (
-            <span className="mr-1" style={{ color: PRIORITY_ICON_COLOR }}>
-              {icon}
-            </span>
-          ) : null
+          return icon ? <span className="mr-1">{icon}</span> : null
         })()}
         {pjt.name}
       </button>

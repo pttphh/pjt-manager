@@ -99,19 +99,16 @@ export function projectColor(status: ProjectStatus, urgent?: boolean | null): Sw
 
 /**
  * 우선순위 아이콘 (사이드바·PJT 관리 카드 공용). 정기가 있으면 항상 가장 왼쪽.
- * 정기=🔄, 긴급=🚨, 중요=💡, 긴급+중요=★(빨강)
+ * 정기=🔄, 긴급=🚨, 중요=💡, 긴급+중요=🔥
  *
- * 긴급+중요는 이모지 ⭐(고정 노랑) 대신 텍스트 글리프 ★(U+2605 + VS15)를 쓴다.
- * 텍스트 글리프라 CSS color가 먹으므로, 아이콘을 그리는 쪽에서 PRIORITY_ICON_COLOR를
- * 그대로 걸어주면 된다 — 나머지 이모지(🔄🚨💡)는 color 영향을 받지 않는다.
+ * 긴급+중요는 긴급(🚨)의 연장선 — 같은 빨강 계열이면서 '최우선'으로 읽히는 🔥를 쓴다.
+ * 전부 이모지라 색은 이모지 자체가 갖는다 (CSS color 지정 불필요).
  */
-export const PRIORITY_ICON_COLOR = '#D92D20' // 긴급+중요 ★ 전용 빨강
-
 export function priorityIcon(
   urgent?: boolean | null,
   important?: boolean | null,
   regular?: boolean | null,
 ): string {
-  const base = urgent && important ? '★︎' : urgent ? '🚨' : important ? '💡' : ''
+  const base = urgent && important ? '🔥' : urgent ? '🚨' : important ? '💡' : ''
   return (regular ? '🔄' : '') + base
 }

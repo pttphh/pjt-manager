@@ -59,7 +59,7 @@ export interface Person { id: string; name: string }
 export interface Project {
   id: string; name: string; description: string | null
   link_urls?: string[] | null         // 관련 온라인 주소 여러 개 (migrations/006), 세부화면 상단에서 각각 새 창으로 열림 (구 단일 link_url=003)
-  is_urgent?: boolean; is_important?: boolean  // 긴급/중요 (migrations/007). PJT 관리 카드 이름 앞 아이콘: 긴급🚨 중요💡 둘다★(빨강)
+  is_urgent?: boolean; is_important?: boolean  // 긴급/중요 (migrations/007). PJT 관리 카드 이름 앞 아이콘: 긴급🚨 중요💡 둘다🔥
   division_id: string; status: ProjectStatus
   start_date: string | null; due_date: string | null; completed_at: string | null
   divisions?: Division
@@ -87,7 +87,7 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 4. **메모는 누적 저장**(todo_memos insert), 화면에는 최신 1건만 표시. 날짜만 표기(시각 없음).
 5. **TaskModal은 단일 창**: 신규 등록·기존 Task 클릭 전부 동일 컴포넌트. 필드: Task명 / 날짜(기본 작성일) / 멤버(기본=PJT 멤버 전원) / 결정&전달사항 / **링크(여러 개, 새 창)** / Todo 행(내용·담당자·PJT·삭제). 링크는 PJT와 동일 패턴(link_urls 배열, migrations/009 미적용 시 폴백 저장), 세부화면 Tasks 목록에 각 링크 `↗`로 노출. 담당자 = Task 멤버 중 체크박스 복수 선택. Todo 상태는 이 창에 표기하지 않고 변경 불가. **새로 추가되는 Todo는 항상 draft로 생성**(기존 Todo 상태는 건드리지 않음). 하단: 저장 + 삭제(확인창, 기타 Task는 삭제 불가)만 — **배포 버튼 없음**(배포는 배포 탭에서 Todo 단위/Task 일괄 처리).
 6. **배포 탭**: 두 섹션 — 상단 **미배포**(draft Todo 있는 Task, 기본 펼침) / 하단 **배포됨**(draft 없이 published만, **기본 접힘**·헤더 클릭으로 펼침). 배포해도 회색으로 남아 되돌리기 가능, **모든 Todo가 checked/done으로 넘어가야 사라짐**(무한 누적 아님). 묶음 = 헤더 `Task명 (작성 M/D) — 프로젝트명`(draft 있으면 주황+'이 Task 전체 배포', 전부 배포됐으면 회색+'배포됨 n건·되돌리기 가능') + 지시사항(decisions) 미리보기 + 전체 Todo 목록(draft=정상+'배포', published=회색+'미배포로 되돌리기', checked/done=회색 표시만). 각 Task 헤더 좌측 ▶/▼로 접기/펼치기(헤더 클릭 토글, '전체 배포' 버튼은 stopPropagation). 배포 시 `deployed_at=now()`, 되돌리기 시 null. PJT 세부 Tasks 목록 표기는 `YY.MM.DD Task명`.
-7. **PJT 관리 탭**: 태그별 컬럼(그리드 auto-fill minmax(220px,1fr) 자동 줄바꿈 — 가로 스크롤 없음, 빈 컬럼도 표시), PJT명 카드. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 카드 이름 앞에 우선순위 아이콘(긴급🚨/중요💡/둘다★(빨강)). 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
+7. **PJT 관리 탭**: 태그별 컬럼(그리드 auto-fill minmax(220px,1fr) 자동 줄바꿈 — 가로 스크롤 없음, 빈 컬럼도 표시), PJT명 카드. 복수 태그 = 중복 노출. 마지막에 '태그 없음' 컬럼. 카드 배경 = PJT 상태색. 카드 이름 앞에 우선순위 아이콘(긴급🚨/중요💡/둘다🔥). 상단에 **상태 필터 칩(미진행·진행중·보류·완료 다중 선택, 기본값 = 완료 제외 3개)** — 칩 색이 곧 카드색 범례. 완료 PJT는 '완료' 칩을 켜면 함께 표시(설정에서도 열람 가능). 우측 상단 'PJT 등록'. 새 Task 작성 버튼은 이 탭/배포 탭에 없음(Task 작성은 PJT 세부화면에서만).
 8. **PJT 등록 시 "기타-{프로젝트명}" Task 자동 생성**: is_misc=true (미스 Task 식별은 title이 아니라 `is_misc` 플래그로만 판별). 특별 취급 없음 — 기타 Task의 Todo도 draft로 생성되어 같은 배포 절차를 탄다(단, 기타 Task 자체는 삭제 불가).
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
 10. **삭제**: PJT·Task 모두 삭제 가능, cascade(스키마에 정의됨), 반드시 확인창.
@@ -104,7 +104,7 @@ colors: {
 }
 ```
 - **PJT 상태색(단일 소스 = `types.STATUS_CARD_STYLE`)**: 미진행=회색(#F1F0EC/#55534E) · 진행중=파랑(#E6F1FB/#0C447C) · 보류=노랑(#FAEEDA/#633806) · 완료=초록(#E1F5EE/#085041). **긴급(is_urgent) 체크 시 상태 무관 빨강(#FCEBEB/#791F1F)** — `types.projectColor(status, urgent)` 사용. PJT 카드·세부 상태 드롭박스 등 상태색 쓰는 모든 곳 일괄.
-- 사이드바·PJT 카드 이름 앞 아이콘: `types.priorityIcon(urgent, important, regular)` 공용 — 정기🔄(항상 맨 왼쪽)·긴급🚨·중요💡·긴급+중요★(빨강 #D92D20, 이모지 아닌 텍스트 글리프라 CSS color 적용). is_regular=migrations/008.
+- 사이드바·PJT 카드 이름 앞 아이콘: `types.priorityIcon(urgent, important, regular)` 공용 — 정기🔄(항상 맨 왼쪽)·긴급🚨·중요💡·긴급+중요🔥(긴급🚨의 연장선 — 전부 이모지라 CSS color 불필요). is_regular=migrations/008.
 - 카드 border border-gray-200 rounded-xl, 그림자 최소화. 입력 필드 흰 배경.
 
 ## 대표 쿼리 패턴

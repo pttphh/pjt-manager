@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DATA_CHANGED } from '../../lib/events'
-import { priorityIcon, PRIORITY_ICON_COLOR } from '../../types'
+import { priorityIcon } from '../../types'
 import type { Division, Project } from '../../types'
 
 const SIDEBAR_KEY = 'pm_sidebar_w'
@@ -219,10 +219,7 @@ export default function Sidebar() {
                       >
                         <span className="h-1 w-1 flex-shrink-0 rounded-[1px] bg-ink-4" />
                         {priorityIcon(p.is_urgent, p.is_important, p.is_regular) && (
-                          // color는 텍스트 글리프 ★에만 적용된다 (🔄🚨💡 이모지는 영향 없음)
-                          <span className="flex-shrink-0" style={{ color: PRIORITY_ICON_COLOR }}>
-                            {priorityIcon(p.is_urgent, p.is_important, p.is_regular)}
-                          </span>
+                          <span className="flex-shrink-0">{priorityIcon(p.is_urgent, p.is_important, p.is_regular)}</span>
                         )}
                         <span className="truncate">{p.name}</span>
                       </button>
