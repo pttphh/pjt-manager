@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { TAG_SWATCHES, tagSwatch } from '../lib/colors'
 import { STATUS_CARD_STYLE, projectColor, priorityIcon } from '../types'
+import { MY_NAME } from '../lib/config'
 import type { ProjectStatus, Tag } from '../types'
 
 interface TagLink {
@@ -17,8 +18,14 @@ interface PjtRow {
   urgent: boolean
   important: boolean
   regular: boolean
+  myOpenTodo: boolean // 담당자에 MY_NAME 포함 + done 아닌 Todo 보유 → 카드 빨강
   tags: TagLink[]
   sort: number // '태그 없음' 컬럼용 정렬값
+}
+// 내 미실행 Todo 판별용 (project_id = Todo가 속한 PJT)
+interface MyTodoRow {
+  project_id: string
+  todo_assignees: { people: { name: string } | null }[] | null
 }
 interface RawProject {
   id: string
@@ -88,13 +95,25 @@ export default function ProjectManageTab() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [tagRes, pjtRes] = await Promise.all([
+      const [tagRes, pjtRes, myTodoRes] = await Promise.all([
         supabase.from('tags').select('*').order('sort_order'),
         // 완료 PJT도 필터로 볼 수 있어야 하므로 전체 상태를 불러온다 (표시는 statusFilter로 제어)
         // select('*') 로 받아 migration 007(is_urgent/is_important) 미적용이어도 깨지지 않게 한다.
         supabase.from('projects').select('*, project_tags(tag_id, sort_order)'),
+        // 내 미실행 Todo = done 아닌 전부(draft·published·checked). 담당자 매칭은 클라이언트에서.
+        supabase.from('todos').select('project_id, todo_assignees(people(name))').neq('status', 'done'),
       ])
       setTags((tagRes.data as Tag[]) ?? [])
+
+      // 담당자에 MY_NAME 이 있는 미실행 Todo를 가진 PJT id 집합 (실패해도 색만 빠지고 탭은 정상 동작)
+      const myPjtIds = new Set<string>()
+      if (myTodoRes.error) {
+        console.error('[ProjectManageTab] 내 Todo 로드 실패', myTodoRes.error)
+      } else {
+        for (const t of (myTodoRes.data as unknown as MyTodoRow[]) ?? []) {
+          if ((t.todo_assignees ?? []).some((a) => a.people?.name === MY_NAME)) myPjtIds.add(t.project_id)
+        }
+      }
       if (pjtRes.error) {
         // 대개 migration 002 (sort_order/색 컬럼) 미적용
         console.error('[ProjectManageTab] 프로젝트 로드 실패', pjtRes.error)
@@ -115,6 +134,7 @@ export default function ProjectManageTab() {
             urgent: !!p.is_urgent,
             important: !!p.is_important,
             regular: !!p.is_regular,
+            myOpenTodo: myPjtIds.has(p.id),
             sort: p.sort_order ?? 0,
             tags: (p.project_tags ?? []).map((t) => ({ tagId: t.tag_id, sort: t.sort_order ?? 0 })),
           })),
@@ -292,7 +312,7 @@ export default function ProjectManageTab() {
   }
 
   function Card({ pjt, col }: { pjt: PjtRow; col: string }) {
-    const s = projectColor(pjt.status, pjt.urgent)
+    const s = projectColor(pjt.status, pjt.urgent, pjt.myOpenTodo)
     const dragging = dragCard?.col === col && dragCard?.id === pjt.id
     return (
       <button

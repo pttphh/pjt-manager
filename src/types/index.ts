@@ -92,9 +92,16 @@ export const STATUS_CARD_STYLE: Record<ProjectStatus, Swatch4> = {
 // 긴급 표시(상태 무관 빨강). 긴급+중요도 빨강.
 export const URGENT_STYLE: Swatch4 = { bg: '#FCEBEB', fg: '#791F1F', bd: '#EFCFCF', label: '긴급' }
 
-/** PJT 카드/상태 표시 색: 긴급이면 빨강, 아니면 상태색 */
-export function projectColor(status: ProjectStatus, urgent?: boolean | null): Swatch4 {
-  return urgent ? URGENT_STYLE : STATUS_CARD_STYLE[status]
+/**
+ * PJT 카드/상태 표시 색: 빨강(긴급 or 내 미실행 Todo 보유), 아니면 상태색.
+ * myOpenTodo = 담당자에 lib/config.MY_NAME 이 포함된 done 아닌 Todo가 이 PJT에 있음 (PJT 관리 카드에서만 사용).
+ */
+export function projectColor(
+  status: ProjectStatus,
+  urgent?: boolean | null,
+  myOpenTodo?: boolean | null,
+): Swatch4 {
+  return urgent || myOpenTodo ? URGENT_STYLE : STATUS_CARD_STYLE[status]
 }
 
 /**
