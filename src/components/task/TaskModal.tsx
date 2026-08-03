@@ -357,7 +357,7 @@ export default function TaskModal({
       {/* 넓은 화면(≥lg): 우측 사이드 패널(680px). 분할·좁은 화면(<lg): 전체화면.
           full-screen 폭은 w-full(고정 부모 100%)로 잡아야 함 — 100vw는 #root zoom(1.15)에 부풀려져 오버플로우한다.
           lg 폭 상한도 같은 이유로 zoom 배율만큼 보정. */}
-      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)] lg:w-[680px] lg:max-w-[calc(94vw/var(--app-zoom))]">
+      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)] lg:w-[500px] lg:max-w-[calc(94vw/var(--app-zoom))]">
         {/* 헤더 (고정) */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-[22px] py-3.5">
           <div>
@@ -443,14 +443,14 @@ export default function TaskModal({
         Todo <span className="text-[10px] text-ink-3">— 상태 표기·변경 없음</span>
       </div>
       <div className="mb-3.5 rounded-lg border border-line p-2.5">
-        <div className="mb-1 grid grid-cols-[minmax(0,3fr)_140px_160px_30px] gap-2 px-0.5 text-[10px] text-ink-3">
+        <div className="mb-1 grid grid-cols-[minmax(0,3fr)_110px_130px_30px] gap-2 px-0.5 text-[10px] text-ink-3">
           <span>내용</span>
           <span>담당자 (멤버 중 복수)</span>
           <span>PJT</span>
           <span />
         </div>
         {todos.map((t) => (
-          <div key={t.key} className="mb-1.5 grid grid-cols-[minmax(0,3fr)_140px_160px_30px] items-center gap-2">
+          <div key={t.key} className="mb-1.5 grid grid-cols-[minmax(0,3fr)_110px_130px_30px] items-center gap-2">
             <input
               value={t.title}
               onChange={(e) => patchTodo(t.key, { title: e.target.value })}

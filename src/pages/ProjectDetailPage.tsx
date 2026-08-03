@@ -497,10 +497,10 @@ export default function ProjectDetailPage() {
             </p>
           </section>
 
-          {/* Tasks — 폭을 Task 사이드 패널(680px)과 동일하게. 패널이 열리면 이 칸만 덮이고 좌측 Todo는 온전히 보인다 */}
+          {/* Tasks — 폭을 Task 사이드 패널(500px)과 동일하게. 패널이 열리면 이 칸만 덮이고 좌측 Todo는 온전히 보인다 */}
           <section
             className="min-w-0 rounded-xl"
-            style={{ flex: '0 1 680px', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+            style={{ flex: '0 1 500px', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
           >
             <p
               className="text-[13px] font-bold text-ink-1"
