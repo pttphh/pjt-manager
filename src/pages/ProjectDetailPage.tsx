@@ -342,10 +342,10 @@ export default function ProjectDetailPage() {
 
         {/* 좌: Todo / 우: Tasks — Task 사이드 패널(우측 drawer)이 열려도 좌측 Todo가 가려지지 않도록 */}
         <div className="flex items-start gap-4">
-          {/* Todo */}
+          {/* Todo — 남는 폭을 모두 차지. 좁은 화면에선 min-w 아래로 내려가지 않고 대신 Tasks가 줄어든다 */}
           <section
-            className="min-w-0 rounded-xl"
-            style={{ flex: '1.55 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+            className="min-w-[360px] rounded-xl"
+            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
           >
             <p
               className="text-[13px] font-bold text-ink-1"
@@ -497,10 +497,10 @@ export default function ProjectDetailPage() {
             </p>
           </section>
 
-          {/* Tasks */}
+          {/* Tasks — 폭을 Task 사이드 패널(680px)과 동일하게. 패널이 열리면 이 칸만 덮이고 좌측 Todo는 온전히 보인다 */}
           <section
             className="min-w-0 rounded-xl"
-            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+            style={{ flex: '0 1 680px', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
           >
             <p
               className="text-[13px] font-bold text-ink-1"
