@@ -4,6 +4,8 @@ import { MY_NAME } from '../lib/config'
 import type { Division } from '../types'
 
 type ViewMode = 'task' | 'mine' | 'person'
+// 정렬: Task 작성일 기준 최신순/오래된순
+type SortOrder = 'newest' | 'oldest'
 // 이 탭에 노출되는 Todo 상태: published(미진행 구간) | checked(체크됨 구간). draft 미노출, done 제거.
 type ShownStatus = 'published' | 'checked'
 
@@ -43,6 +45,8 @@ interface Group {
   name: string
   metaLine: string
   count: number
+  sortDate: string // 정렬 기준 = 그룹 내 Todo의 Task 작성일 (최신순이면 최대, 오래된순이면 최소)
+  pinLast?: boolean // '미지정' 그룹은 정렬과 무관하게 항상 맨 아래
   todos: (TodoItem & { metaLabel: string; metaValue: string })[]
 }
 
@@ -83,6 +87,7 @@ export default function TodoCheckTab() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all') // division id | 'all'
   const [view, setView] = useState<ViewMode>('task')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('newest') // Task 작성일 기준 정렬
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   // 미진행 Todo별 진행사항 메모 입력값 (Todo id → 문자열). 저장 후 칸이 비워져 다음 메모를 바로 이어 쓴다.
   const [memoInputs, setMemoInputs] = useState<Record<string, string>>({})
@@ -191,6 +196,29 @@ export default function TodoCheckTab() {
     void load()
   }
 
+  // 그룹의 대표 날짜: 최신순이면 그룹 내 최대 날짜, 오래된순이면 최소 날짜
+  function groupDate(todos: { taskDate: string }[]): string {
+    return todos.reduce((acc, t) => {
+      const d = t.taskDate ?? ''
+      if (!acc) return d
+      if (sortOrder === 'oldest') return d && d < acc ? d : acc
+      return d > acc ? d : acc
+    }, '')
+  }
+  // 그룹·그룹 내 Todo를 Task 작성일로 정렬 ('미지정'은 항상 맨 아래)
+  function sortGroups(groups: Group[]): Group[] {
+    const dir = sortOrder === 'oldest' ? 1 : -1
+    return groups
+      .map((g) => ({
+        ...g,
+        todos: [...g.todos].sort((a, b) => dir * (a.taskDate ?? '').localeCompare(b.taskDate ?? '')),
+      }))
+      .sort((a, b) => {
+        if (a.pinLast !== b.pinLast) return a.pinLast ? 1 : -1
+        return dir * a.sortDate.localeCompare(b.sortDate)
+      })
+  }
+
   function buildGroups(status: ShownStatus): Group[] {
     let filtered = items.filter(
       (it) => it.status === status && (filter === 'all' || it.divisionId === filter),
@@ -208,6 +236,7 @@ export default function TodoCheckTab() {
             name: person,
             metaLine: '',
             count: todos.length,
+            sortDate: groupDate(todos),
             todos: todos.map((it) => ({ ...it, metaLabel: 'PJT', metaValue: it.todoProjectName })),
           }
         })
@@ -220,29 +249,34 @@ export default function TodoCheckTab() {
           name: '미지정',
           metaLine: '',
           count: unassigned.length,
+          sortDate: groupDate(unassigned),
+          pinLast: true,
           todos: unassigned.map((it) => ({ ...it, metaLabel: 'PJT', metaValue: it.todoProjectName })),
         })
       }
-      return groups
+      return sortGroups(groups)
     }
     // task view
     const order: string[] = []
     filtered.forEach((it) => !order.includes(it.taskId) && order.push(it.taskId))
-    return order.map((tid) => {
-      const todos = filtered.filter((it) => it.taskId === tid)
-      const first = todos[0]
-      return {
-        key: `t:${status}:${tid}`,
-        name: first.taskTitle,
-        metaLine: `(작성 ${md(first.taskDate)}) — ${first.taskProjectName}`,
-        count: todos.length,
-        todos: todos.map((it) => ({
-          ...it,
-          metaLabel: '담당',
-          metaValue: it.assignees.join(', ') || '—',
-        })),
-      }
-    })
+    return sortGroups(
+      order.map((tid) => {
+        const todos = filtered.filter((it) => it.taskId === tid)
+        const first = todos[0]
+        return {
+          key: `t:${status}:${tid}`,
+          name: first.taskTitle,
+          metaLine: `(작성 ${md(first.taskDate)}) — ${first.taskProjectName}`,
+          count: todos.length,
+          sortDate: first.taskDate ?? '',
+          todos: todos.map((it) => ({
+            ...it,
+            metaLabel: '담당',
+            metaValue: it.assignees.join(', ') || '—',
+          })),
+        }
+      }),
+    )
   }
 
   const unchecked = buildGroups('published')
@@ -250,17 +284,18 @@ export default function TodoCheckTab() {
   const isOpen = (key: string) => !collapsed[key]
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
 
-  const chip = (active: boolean): React.CSSProperties => ({
+  const ctrlLabel: React.CSSProperties = { fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }
+  const selectStyle: React.CSSProperties = {
     fontFamily: 'inherit',
-    fontSize: '11.5px',
-    borderRadius: 999,
-    padding: '5px 12px',
+    fontSize: '12px',
+    color: '#1F1E1B',
+    background: '#fff',
+    border: '1px solid #CFCDC7',
+    borderRadius: 8,
+    padding: '6px 10px',
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    background: active ? '#185FA5' : '#fff',
-    color: active ? '#fff' : '#55534E',
-    border: `1px solid ${active ? '#185FA5' : '#CFCDC7'}`,
-  })
+    outline: 'none',
+  }
   const seg = (active: boolean, left: boolean): React.CSSProperties => ({
     border: 0,
     borderLeft: left ? '1px solid #CFCDC7' : undefined,
@@ -280,7 +315,7 @@ export default function TodoCheckTab() {
         <div className="py-20 text-center text-sm text-ink-3">불러오는 중…</div>
       ) : (
         <>
-          {/* 상단: [보기 기준 선택] → [구분 필터 칩] (좌→우) */}
+          {/* 상단: [보기 기준] → [정렬 드롭박스] → [구분 드롭박스] (좌→우) */}
           <div className="mb-5 flex items-center gap-3">
             <div className="flex flex-shrink-0 items-center gap-[7px]">
               <span style={{ fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>보기 기준</span>
@@ -296,15 +331,28 @@ export default function TodoCheckTab() {
                 </button>
               </div>
             </div>
-            <div className="flex min-w-0 flex-wrap gap-1.5">
-              <button style={chip(filter === 'all')} onClick={() => setFilter('all')}>
-                전체
-              </button>
-              {divisions.map((d) => (
-                <button key={d.id} style={chip(filter === d.id)} onClick={() => setFilter(d.id)}>
-                  {d.name}
-                </button>
-              ))}
+            <div className="flex flex-shrink-0 items-center gap-[7px]">
+              <span style={ctrlLabel}>정렬</span>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                style={selectStyle}
+                title="Task 작성일 기준"
+              >
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+              </select>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-[7px]">
+              <span style={ctrlLabel}>구분</span>
+              <select value={filter} onChange={(e) => setFilter(e.target.value)} style={selectStyle}>
+                <option value="all">전체</option>
+                {divisions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

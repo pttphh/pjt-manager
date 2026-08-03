@@ -340,62 +340,8 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
+        {/* 좌: Todo / 우: Tasks — Task 사이드 패널(우측 drawer)이 열려도 좌측 Todo가 가려지지 않도록 */}
         <div className="flex items-start gap-4">
-          {/* Tasks */}
-          <section
-            className="min-w-0 rounded-xl"
-            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
-          >
-            <p
-              className="text-[13px] font-bold text-ink-1"
-              style={{ paddingBottom: 10, marginBottom: 11, borderBottom: '1px solid #E2E0DB' }}
-            >
-              Tasks
-            </p>
-            <button
-              onClick={() => setTaskModal({ open: true, taskId: null })}
-              className="mb-1.5 w-full rounded-lg border border-dashed border-line-strong py-2 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
-            >
-              + 신규 Task 등록
-            </button>
-            <div className="flex flex-col gap-1.5">
-              {tasks.map((t) => {
-                const taskLinks = (t.link_urls ?? []).filter(Boolean)
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-2 rounded-lg border border-line-strong bg-white px-3 py-2 hover:bg-sidebar-bg"
-                  >
-                    <button
-                      onClick={() => setTaskModal({ open: true, taskId: t.id })}
-                      className="min-w-0 flex-1 text-left text-[12.5px]"
-                    >
-                      <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
-                      <span className="text-ink-1">{t.title}</span>
-                      {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
-                    </button>
-                    {taskLinks.length > 0 && (
-                      <span className="flex flex-shrink-0 items-center gap-1.5">
-                        {taskLinks.map((u, i) => (
-                          <a
-                            key={i}
-                            href={toHref(u)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={u}
-                            className="text-[13px] leading-none text-primary hover:underline"
-                          >
-                            ↗
-                          </a>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-
           {/* Todo */}
           <section
             className="min-w-0 rounded-xl"
@@ -549,6 +495,61 @@ export default function ProjectDetailPage() {
             <p className="mt-3 text-[10px] text-ink-3">
               체크 → 완료 · 해제 → 메모 있으면 '체크', 없으면 '미진행' 복귀
             </p>
+          </section>
+
+          {/* Tasks */}
+          <section
+            className="min-w-0 rounded-xl"
+            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+          >
+            <p
+              className="text-[13px] font-bold text-ink-1"
+              style={{ paddingBottom: 10, marginBottom: 11, borderBottom: '1px solid #E2E0DB' }}
+            >
+              Tasks
+            </p>
+            <button
+              onClick={() => setTaskModal({ open: true, taskId: null })}
+              className="mb-1.5 w-full rounded-lg border border-dashed border-line-strong py-2 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
+            >
+              + 신규 Task 등록
+            </button>
+            <div className="flex flex-col gap-1.5">
+              {tasks.map((t) => {
+                const taskLinks = (t.link_urls ?? []).filter(Boolean)
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-2 rounded-lg border border-line-strong bg-white px-3 py-2 hover:bg-sidebar-bg"
+                  >
+                    <button
+                      onClick={() => setTaskModal({ open: true, taskId: t.id })}
+                      className="min-w-0 flex-1 text-left text-[12.5px]"
+                    >
+                      <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
+                      <span className="text-ink-1">{t.title}</span>
+                      {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
+                    </button>
+                    {taskLinks.length > 0 && (
+                      <span className="flex flex-shrink-0 items-center gap-1.5">
+                        {taskLinks.map((u, i) => (
+                          <a
+                            key={i}
+                            href={toHref(u)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={u}
+                            className="text-[13px] leading-none text-primary hover:underline"
+                          >
+                            ↗
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </section>
         </div>
       </div>

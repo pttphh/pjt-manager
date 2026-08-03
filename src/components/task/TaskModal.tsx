@@ -406,7 +406,7 @@ export default function TaskModal({
         onChange={(e) => setDecisions(e.target.value)}
         onKeyDown={handleDecisionsKey}
         placeholder="선택 후 Ctrl+B → **굵게**"
-        className={`${inputCls} mb-3 h-20 resize-none`}
+        className={`${inputCls} mb-3 h-[200px] resize-y`}
       />
 
       <div className={labelCls}>
