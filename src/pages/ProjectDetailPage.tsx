@@ -33,9 +33,9 @@ interface DetailTodo {
   title: string
   status: TodoStatus
   deployedAt: string | null
+  checkedAt: string | null // 체크 단계를 거쳤는지 (migrations/010)
   sort_order: number
   assignees: string[]
-  memoCount: number
   todoProjectId: string // 이 Todo가 담당(태그)된 PJT
   todoProjectName: string
 }
@@ -78,8 +78,8 @@ export default function ProjectDetailPage() {
     setLoading(true)
     try {
       // Todo 노출 = 이 PJT에 담당(todo.project_id) OR 이 PJT의 Task 소속(task.project_id) 합집합
-      const todoFields =
-        'id,title,status,deployed_at,sort_order,project_id,projects(name),todo_assignees(people(name)),todo_memos(id)'
+      // '*' 로 받아 migrations/010(checked_at) 미적용이어도 쿼리가 깨지지 않게 한다
+      const todoFields = '*,projects(name),todo_assignees(people(name)),todo_memos(id)'
       const [{ data: proj }, { data: taskData }, { data: todoByProject }, { data: todoByTask }] =
         await Promise.all([
           supabase
@@ -121,6 +121,7 @@ export default function ProjectDetailPage() {
               title: string
               status: TodoStatus
               deployed_at: string | null
+              checked_at?: string | null
               sort_order: number
               project_id: string
               projects: { name: string } | null
@@ -132,9 +133,9 @@ export default function ProjectDetailPage() {
               title: t.title,
               status: t.status,
               deployedAt: t.deployed_at,
+              checkedAt: t.checked_at ?? null,
               sort_order: t.sort_order,
               assignees: (t.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
-              memoCount: (t.todo_memos ?? []).length,
               todoProjectId: t.project_id,
               todoProjectName: t.projects?.name ?? '',
             }
@@ -165,10 +166,11 @@ export default function ProjectDetailPage() {
   }
 
   async function toggleTodo(todo: DetailTodo) {
-    // 체크 → done. 해제 → 메모 있으면 checked, 없으면 배포됐으면 published, 미배포면 draft.
+    // 체크 → done. 해제 → 체크 단계를 거쳤으면 checked, 아니면 배포됐으면 published, 미배포면 draft.
+    // (메모 유무로 추정하지 않는다 — 메모 없이도 체크가 가능하므로. migrations/010)
     const next: TodoStatus =
       todo.status === 'done'
-        ? todo.memoCount > 0
+        ? todo.checkedAt
           ? 'checked'
           : todo.deployedAt
             ? 'published'

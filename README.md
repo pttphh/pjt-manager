@@ -32,6 +32,7 @@ VITE_APP_PASSWORD=        # 입장 비밀번호(단일)
 7. `migrations/007-project-priority.sql` — PJT 긴급/중요 플래그
 8. `migrations/008-project-regular.sql` — PJT 정기 플래그
 9. `migrations/009-task-links.sql` — Task 링크(link_urls 배열)
+10. `migrations/010-todo-checked-at.sql` — Todo 체크 이력(checked_at). 완료 해제 시 복귀 상태 판단용
 
 > 기존 DB(구 스키마)를 쓰고 있다면 `migrations/005-todo-level-deploy.sql`도 실행
 > (Task 단위 배포 → Todo 단위 배포 전환. 새 설치는 불필요 — schema-v2.sql에 이미 반영됨)

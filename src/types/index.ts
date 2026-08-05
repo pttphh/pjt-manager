@@ -62,6 +62,9 @@ export interface Todo {
   title: string
   status: TodoStatus
   deployed_at?: string | null // 배포 시각 (미배포 복귀 시 null)
+  /** 체크(checked) 단계를 거친 시각 (migrations/010). 체크 해제 시 null.
+   *  완료(done) 해제 시 checked 로 되돌릴지 판단하는 근거 — 메모 유무로 추정하지 않는다. */
+  checked_at?: string | null
   sort_order: number
   todo_assignees?: { people: Person }[]
   todo_memos?: TodoMemo[]

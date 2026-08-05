@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { MY_NAME } from '../lib/config'
-import type { Division } from '../types'
+import type { Division, TodoStatus } from '../types'
 
 type ViewMode = 'task' | 'mine' | 'person'
 // 정렬: Task 작성일 기준 최신순/오래된순
@@ -158,6 +158,15 @@ export default function TodoCheckTab() {
       savingRef.current.delete(todoId)
     }
   }
+  // 상태 변경 공용 — migrations/010(checked_at) 미적용 시에도 깨지지 않도록 폴백
+  async function setTodoStatus(todoId: string, status: TodoStatus, checkedAt?: string | null) {
+    const patch = checkedAt === undefined ? { status } : { status, checked_at: checkedAt }
+    const { error } = await supabase.from('todos').update(patch).eq('id', todoId)
+    if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+      await supabase.from('todos').update({ status }).eq('id', todoId)
+    }
+  }
+
   // 체크(상태 변경) — 저장과 분리. 입력 중이던 메모가 있으면 데이터 손실 방지 위해 함께 저장.
   async function checkTodo(todoId: string) {
     if (savingRef.current.has(todoId)) return
@@ -165,7 +174,8 @@ export default function TodoCheckTab() {
     try {
       const content = (memoInputs[todoId] ?? '').trim()
       if (content) await supabase.from('todo_memos').insert({ todo_id: todoId, content })
-      await supabase.from('todos').update({ status: 'checked' }).eq('id', todoId)
+      // 체크를 거쳤음을 기록 → 나중에 완료를 해제하면 메모 유무와 무관하게 checked 로 복귀
+      await setTodoStatus(todoId, 'checked', new Date().toISOString())
       setMemoInputs((m) => ({ ...m, [todoId]: '' }))
       void load()
     } finally {
@@ -187,12 +197,13 @@ export default function TodoCheckTab() {
     void load()
   }
   async function completeTodo(todoId: string) {
-    await supabase.from('todos').update({ status: 'done' }).eq('id', todoId)
+    // checked_at 은 그대로 둔다 — 완료를 해제하면 다시 checked 로 돌아가야 하므로
+    await setTodoStatus(todoId, 'done')
     void load()
   }
   async function uncheckTodo(todoId: string) {
-    // 체크 해제 → 미진행(published) 복귀 (메모 이력은 유지, 배포 상태는 그대로)
-    await supabase.from('todos').update({ status: 'published' }).eq('id', todoId)
+    // 체크 해제 → 미진행(published) 복귀. 체크 이력도 지운다(메모 이력·배포 상태는 유지)
+    await setTodoStatus(todoId, 'published', null)
     void load()
   }
 
