@@ -55,10 +55,16 @@ interface Group {
   todos: (TodoItem & { metaLabel: string; metaValue: string })[]
 }
 
+/** M/D 표기. 메모의 timestamptz(UTC)는 로컬 날짜로 변환(오전 9시 이전 기록이 하루 전으로 밀리지 않게).
+ *  Task 작성일처럼 날짜만 있는 문자열은 그대로 파싱한다. */
 const md = (d: string | null) => {
   if (!d) return ''
-  const [, m, day] = d.slice(0, 10).split('-')
-  return `${+m}/${+day}`
+  if (!d.includes('T')) {
+    const [, m, day] = d.slice(0, 10).split('-')
+    return `${+m}/${+day}`
+  }
+  const dt = new Date(d)
+  return isNaN(dt.getTime()) ? '' : `${dt.getMonth() + 1}/${dt.getDate()}`
 }
 
 // 단일 상태 뱃지 (Todo 자체 상태 기준): 미배포(draft) → 배포(published) → 체크(checked)

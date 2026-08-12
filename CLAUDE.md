@@ -93,7 +93,7 @@ export interface TodoMemo { id: string; todo_id: string; content: string; create
 9. **구분·태그·멤버 관리는 `ItemManager` 하나로 공용**. 두 진입점이 같은 컴포넌트를 쓴다: ① ProjectFormModal 안의 ⚙ 인라인 팝업(InlineManage = 팝업 껍데기), ② `/settings` 3탭. 삭제는 `lib/deleteGuards`의 사용처 검사를 반드시 거친다 — 구분=사용 중이면 **차단**, 태그·멤버=사용 건수 경고 후 확인. 중복 구현 금지.
 10. **삭제**: PJT·Task 모두 삭제 가능, cascade(스키마에 정의됨), 반드시 확인창.
 11. **PC 전용.** 반응형 작업하지 않는다. (예외: TaskModal drawer만 분할·좁은 화면<lg에서 전체화면으로 전환 — 규칙5.)
-12. **사이드바 = '나의 할 일' 전용.** PJT 트리·정렬·필터 없음(PJT 진입은 PJT 관리 탭에서만 한다). 담당자에 `lib/config.MY_NAME`이 포함된 **`draft`·`published` Todo만** 표시하고 checked·done은 제외(체크 이후는 Todo 체크 탭에서 관리). 순서는 **Task 작성일 오래된순 고정**. 각 항목 = Todo명 + `PJT명 · M/D` (내 Todo는 생성 즉시 배포되므로 '배포' 뱃지는 달지 않고, 남아 있는 미배포 건만 '미배포' 표시). **클릭 시 점프**: `navigate('/main', { state: { focusTodoId } })` → MainPage가 Todo 체크 탭을 열고 `focusTodoId`를 넘김 → TodoCheckTab이 그 Todo가 속한 그룹을 펼치고 스크롤·강조(2.6초). 스크롤은 `behavior:'smooth'` 금지(렌더가 멈춘 탭에서 아예 동작하지 않음) — 즉시 스크롤 + 재시도.
+12. **사이드바 = '나의 할 일' 전용.** PJT 트리·정렬·필터 없음(PJT 진입은 PJT 관리 탭에서만 한다). 담당자에 `lib/config.MY_NAME`이 포함된 **`draft`·`published` Todo만** 표시하고 checked·done은 제외(체크 이후는 Todo 체크 탭에서 관리). 순서는 **활동일 오래된순 고정** — 활동일 = **마지막 진행사항 메모(`todo_memos.created_at`), 없으면 Todo 등록일(`todos.created_at`)**. 진행사항을 적으면 그 날짜로 갱신되어 아래로 내려가므로, 오래 방치된 일만 위에 남는다. 카드에 표시하는 날짜도 이 활동일이다(정렬과 표시가 어긋나지 않게). 각 항목 = Todo명 + `PJT명 · M/D` (내 Todo는 생성 즉시 배포되므로 '배포' 뱃지는 달지 않고, 남아 있는 미배포 건만 '미배포' 표시). **클릭 시 점프**: `navigate('/main', { state: { focusTodoId } })` → MainPage가 Todo 체크 탭을 열고 `focusTodoId`를 넘김 → TodoCheckTab이 그 Todo가 속한 그룹을 펼치고 스크롤·강조(2.6초). 스크롤은 `behavior:'smooth'` 금지(렌더가 멈춘 탭에서 아예 동작하지 않음) — 즉시 스크롤 + 재시도.
 
 ## Tailwind 색상 토큰
 ```ts

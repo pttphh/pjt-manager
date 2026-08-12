@@ -14,22 +14,30 @@ interface MyTodo {
   id: string
   title: string
   status: 'draft' | 'published'
-  taskDate: string
+  /** 정렬·표시 기준일 = 마지막 진행사항 메모 날짜, 없으면 Todo 등록일 */
+  activityDate: string
   projectName: string
 }
 interface RawTodo {
   id: string
   title: string
   status: string
+  created_at: string | null
   projects: { name: string } | null
-  tasks: { task_date: string } | null
   todo_assignees: { people: { name: string } | null }[] | null
+  todo_memos: { created_at: string }[] | null
 }
 
+/** M/D 표기. timestamptz(UTC)는 로컬 날짜로 변환해야 오전 9시 이전 기록이 하루 전으로 밀리지 않는다.
+ *  날짜만 있는 문자열(YYYY-MM-DD)은 그대로 파싱한다. */
 const md = (d: string | null) => {
   if (!d) return ''
-  const [, m, day] = d.slice(0, 10).split('-')
-  return `${+m}/${+day}`
+  if (!d.includes('T')) {
+    const [, m, day] = d.slice(0, 10).split('-')
+    return `${+m}/${+day}`
+  }
+  const dt = new Date(d)
+  return isNaN(dt.getTime()) ? '' : `${dt.getMonth() + 1}/${dt.getDate()}`
 }
 
 export default function Sidebar() {
@@ -54,7 +62,7 @@ export default function Sidebar() {
   async function loadMyTodos() {
     const { data, error } = await supabase
       .from('todos')
-      .select('id, title, status, projects(name), tasks(task_date), todo_assignees(people(name))')
+      .select('id, title, status, created_at, projects(name), todo_assignees(people(name)), todo_memos(created_at)')
       .in('status', ['draft', 'published'])
     if (error) {
       console.error('[Sidebar] 나의 할 일 로드 실패', error)
@@ -64,16 +72,22 @@ export default function Sidebar() {
     for (const t of (data as unknown as RawTodo[]) ?? []) {
       const mine = (t.todo_assignees ?? []).some((a) => a.people?.name === MY_NAME)
       if (!mine) continue
+      // 진행사항을 적으면 그 날짜로 갱신 → 손 안 댄 일만 위에 남는다
+      const lastMemo = (t.todo_memos ?? [])
+        .map((m) => m.created_at)
+        .filter(Boolean)
+        .sort()
+        .pop()
       rows.push({
         id: t.id,
         title: t.title,
         status: t.status === 'draft' ? 'draft' : 'published',
-        taskDate: t.tasks?.task_date ?? '',
+        activityDate: lastMemo ?? t.created_at ?? '',
         projectName: t.projects?.name ?? '(프로젝트 없음)',
       })
     }
-    // Task 작성일 오래된순 — 묵힌 일이 위로
-    rows.sort((a, b) => (a.taskDate || '9999').localeCompare(b.taskDate || '9999'))
+    // 오래된순 — 오래 방치된 일이 위로
+    rows.sort((a, b) => (a.activityDate || '9999').localeCompare(b.activityDate || '9999'))
     setTodos(rows)
   }
 
@@ -152,7 +166,7 @@ export default function Sidebar() {
               </div>
               <div className="truncate pl-[3px] text-[10.5px] text-ink-3">
                 {t.projectName}
-                {t.taskDate && ` · ${md(t.taskDate)}`}
+                {t.activityDate && ` · ${md(t.activityDate)}`}
               </div>
             </button>
           ))}
