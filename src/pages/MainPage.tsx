@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import Button from '../components/ui/Button'
 import TodoCheckTab from '../tabs/TodoCheckTab'
@@ -15,9 +16,21 @@ const TABS: { key: TabKey; label: string }[] = [
 ]
 
 export default function MainPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('pjt')
+  const location = useLocation()
+  // 사이드바('나의 할 일')에서 넘어온 점프 대상 — Todo 체크 탭을 열고 해당 Todo를 강조한다
+  const jumped = (location.state as { focusTodoId?: string } | null)?.focusTodoId ?? null
+  const [activeTab, setActiveTab] = useState<TabKey>(jumped ? 'todo' : 'pjt')
+  const [focusTodoId, setFocusTodoId] = useState<string | null>(jumped)
   const [showForm, setShowForm] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+
+  // 같은 Todo를 다시 눌러도 반응하도록 location.key(이동마다 갱신)를 기준으로 삼는다
+  useEffect(() => {
+    const f = (location.state as { focusTodoId?: string } | null)?.focusTodoId
+    if (!f) return
+    setActiveTab('todo')
+    setFocusTodoId(f)
+  }, [location.key])
 
   return (
     <Layout>
@@ -48,7 +61,9 @@ export default function MainPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'todo' && <TodoCheckTab />}
+        {activeTab === 'todo' && (
+          <TodoCheckTab focusTodoId={focusTodoId} onFocusDone={() => setFocusTodoId(null)} />
+        )}
         {activeTab === 'deploy' && <TaskDeployTab />}
         {activeTab === 'pjt' && <ProjectManageTab key={reloadKey} />}
       </div>

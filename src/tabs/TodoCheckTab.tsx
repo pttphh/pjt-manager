@@ -3,11 +3,15 @@ import { supabase } from '../lib/supabase'
 import { MY_NAME } from '../lib/config'
 import type { Division, TodoStatus } from '../types'
 
-type ViewMode = 'task' | 'mine' | 'person'
+type ViewMode = 'task' | 'person'
 // 정렬: Task 작성일 기준 최신순/오래된순
 type SortOrder = 'newest' | 'oldest'
-// 이 탭에 노출되는 Todo 상태: published(미진행 구간) | checked(체크됨 구간). draft 미노출, done 제거.
-type ShownStatus = 'published' | 'checked'
+/** 이 탭에 노출되는 Todo 상태.
+ *  미진행 구간 = draft | published, 체크됨 구간 = checked. done 은 제거.
+ *  draft 는 원래 미노출이지만 **담당자가 MY_NAME 인 Todo만 예외로 노출**한다
+ *  (자기 자신에게 배포할 이유가 없으므로 — 사이드바 '나의 할 일'과 짝을 이룬다). */
+type ShownStatus = 'draft' | 'published' | 'checked'
+type Section = 'open' | 'checked'
 
 interface TodoItem {
   id: string
@@ -56,12 +60,14 @@ const md = (d: string | null) => {
   return `${+m}/${+day}`
 }
 
-// 단일 상태 뱃지 (Todo 자체 상태 기준): 배포(published) → 체크(checked)
+// 단일 상태 뱃지 (Todo 자체 상태 기준): 미배포(draft) → 배포(published) → 체크(checked)
 function StatusBadge({ status }: { status: ShownStatus }) {
   const s =
     status === 'checked'
       ? { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '체크' }
-      : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
+      : status === 'draft'
+        ? { bg: '#F1F0EC', fg: '#55534E', bd: '#DAD8D2', label: '미배포' }
+        : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
   return (
     <span
       style={{
@@ -81,7 +87,13 @@ function StatusBadge({ status }: { status: ShownStatus }) {
   )
 }
 
-export default function TodoCheckTab() {
+interface TodoCheckTabProps {
+  /** 사이드바 '나의 할 일'에서 점프해 온 Todo — 그룹을 펼치고 스크롤·강조한다 */
+  focusTodoId?: string | null
+  onFocusDone?: () => void
+}
+
+export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabProps = {}) {
   const [items, setItems] = useState<TodoItem[]>([])
   const [divisions, setDivisions] = useState<Division[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,6 +106,9 @@ export default function TodoCheckTab() {
   // 저장된 메모 수정 중 상태 (메모 id + 편집 내용)
   const [editingMemo, setEditingMemo] = useState<{ id: string; content: string } | null>(null)
   const savingRef = useRef<Set<string>>(new Set()) // 저장/체크 연타 방지
+  // 점프 대상 강조 + 스크롤용 ref
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const todoRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     void load()
@@ -104,7 +119,7 @@ export default function TodoCheckTab() {
     try {
       const [{ data: divData }, { data: taskData }] = await Promise.all([
         supabase.from('divisions').select('*').order('sort_order'),
-        // 노출 기준: todos.status in ('published','checked') — draft 미노출, done 제거
+        // 노출 기준: published·checked 전부 + draft 는 담당자가 MY_NAME 인 것만. done 제거.
         supabase
           .from('tasks')
           .select(
@@ -116,21 +131,29 @@ export default function TodoCheckTab() {
       const flat: TodoItem[] = []
       for (const t of (taskData as unknown as RawTask[]) ?? []) {
         for (const td of t.todos ?? []) {
-          if (td.status !== 'published' && td.status !== 'checked') continue
+          const assignees = (td.todo_assignees ?? [])
+            .map((a) => a.people?.name)
+            .filter(Boolean) as string[]
+          // draft 는 내 담당일 때만 노출 (자기 자신에게 배포할 이유가 없으므로)
+          const shown =
+            td.status === 'published' ||
+            td.status === 'checked' ||
+            (td.status === 'draft' && assignees.includes(MY_NAME))
+          if (!shown) continue
           const memos = (td.todo_memos ?? [])
             .slice()
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
           flat.push({
             id: td.id,
             title: td.title,
-            status: td.status,
+            status: td.status as ShownStatus,
             taskId: t.id,
             taskTitle: t.title,
             taskDate: t.task_date,
             taskProjectName: t.projects?.name ?? '(프로젝트 없음)',
             todoProjectName: td.projects?.name ?? '(프로젝트 없음)',
             divisionId: td.projects?.division_id ?? '',
-            assignees: (td.todo_assignees ?? []).map((a) => a.people?.name).filter(Boolean) as string[],
+            assignees,
             latestMemo: memos[0] ? { content: memos[0].content, date: md(memos[0].created_at) } : null,
             memos: memos.map((m) => ({ id: m.id, content: m.content, date: md(m.created_at) })),
           })
@@ -230,12 +253,13 @@ export default function TodoCheckTab() {
       })
   }
 
-  function buildGroups(status: ShownStatus): Group[] {
-    let filtered = items.filter(
-      (it) => it.status === status && (filter === 'all' || it.divisionId === filter),
+  function buildGroups(section: Section): Group[] {
+    // 미진행 구간 = draft(내 담당만 로드됨) + published, 체크됨 구간 = checked
+    const inSection = (s: ShownStatus) => (section === 'checked' ? s === 'checked' : s !== 'checked')
+    const filtered = items.filter(
+      (it) => inSection(it.status) && (filter === 'all' || it.divisionId === filter),
     )
-    // '나의 할 일': 담당자에 MY_NAME 이 포함된 Todo만 (그 외엔 Task별 그룹핑과 동일)
-    if (view === 'mine') filtered = filtered.filter((it) => it.assignees.includes(MY_NAME))
+    const status = section
     if (view === 'person') {
       const people: string[] = []
       filtered.forEach((it) => it.assignees.forEach((p) => !people.includes(p) && people.push(p)))
@@ -290,8 +314,39 @@ export default function TodoCheckTab() {
     )
   }
 
-  const unchecked = buildGroups('published')
+  const unchecked = buildGroups('open')
   const checked = buildGroups('checked')
+
+  // 사이드바에서 점프해 오면: 그룹 펼치기 → 스크롤 → 잠시 강조
+  useEffect(() => {
+    if (!focusTodoId || loading) return
+    const target = items.find((it) => it.id === focusTodoId)
+    if (!target) return
+    // 해당 Todo가 들어 있는 그룹을 펼친다 (접힘 상태를 명시적으로 해제)
+    const keys = [...unchecked, ...checked]
+      .filter((g) => g.todos.some((t) => t.id === focusTodoId))
+      .map((g) => g.key)
+    if (keys.length) {
+      setCollapsed((c) => {
+        const next = { ...c }
+        keys.forEach((k) => delete next[k])
+        return next
+      })
+    }
+    setHighlightId(focusTodoId)
+    onFocusDone?.()
+    // 그룹을 방금 펼친 경우 DOM 반영이 한 박자 늦으므로 몇 번 재시도한다.
+    // behavior:'smooth' 는 탭이 화면에 없거나 렌더가 멈춘 상황에서 스크롤이 아예 일어나지 않아 쓰지 않는다.
+    const tries = [0, 60, 180, 400].map((ms) =>
+      setTimeout(() => todoRefs.current[focusTodoId]?.scrollIntoView({ block: 'center' }), ms),
+    )
+    const timer = setTimeout(() => setHighlightId(null), 2600)
+    return () => {
+      tries.forEach(clearTimeout)
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTodoId, loading, items])
   const isOpen = (key: string) => !collapsed[key]
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
 
@@ -333,9 +388,6 @@ export default function TodoCheckTab() {
               <div style={{ display: 'flex', border: '1px solid #CFCDC7', borderRadius: 8, overflow: 'hidden' }}>
                 <button style={seg(view === 'task', false)} onClick={() => setView('task')}>
                   Task별
-                </button>
-                <button style={seg(view === 'mine', true)} onClick={() => setView('mine')}>
-                  나의 할 일
                 </button>
                 <button style={seg(view === 'person', true)} onClick={() => setView('person')}>
                   담당자별
@@ -407,7 +459,22 @@ export default function TodoCheckTab() {
                 {isOpen(g.key) && (
                   <div style={{ padding: '2px 13px 12px', background: '#fff' }}>
                     {g.todos.map((td) => (
-                      <div key={td.id} style={{ paddingTop: 11 }}>
+                      <div
+                        key={td.id}
+                        ref={(el) => (todoRefs.current[td.id] = el)}
+                        style={{
+                          paddingTop: 11,
+                          ...(highlightId === td.id
+                            ? {
+                                background: '#E6F1FB',
+                                boxShadow: '0 0 0 2px #185FA5',
+                                borderRadius: 8,
+                                padding: '11px 9px 9px',
+                                margin: '0 -9px',
+                              }
+                            : null),
+                        }}
+                      >
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
                           <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
                             <StatusBadge status={td.status} />
@@ -545,7 +612,22 @@ export default function TodoCheckTab() {
                 {isOpen(g.key) && (
                   <div style={{ padding: '2px 13px 12px', background: '#fff' }}>
                     {g.todos.map((td) => (
-                      <div key={td.id} style={{ paddingTop: 11 }}>
+                      <div
+                        key={td.id}
+                        ref={(el) => (todoRefs.current[td.id] = el)}
+                        style={{
+                          paddingTop: 11,
+                          ...(highlightId === td.id
+                            ? {
+                                background: '#E6F1FB',
+                                boxShadow: '0 0 0 2px #185FA5',
+                                borderRadius: 8,
+                                padding: '11px 9px 9px',
+                                margin: '0 -9px',
+                              }
+                            : null),
+                        }}
+                      >
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
                           <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
                             <StatusBadge status={td.status} />

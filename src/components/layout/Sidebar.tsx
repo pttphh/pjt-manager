@@ -1,122 +1,84 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { DATA_CHANGED } from '../../lib/events'
-import { priorityIcon } from '../../types'
-import type { Division, Project } from '../../types'
+import { MY_NAME } from '../../lib/config'
 
 const SIDEBAR_KEY = 'pm_sidebar_w'
-const COLLAPSE_KEY = 'pm_sidebar_collapsed'
-const MIN_W = 160
-const MAX_W = 320
+const MIN_W = 220
+const MAX_W = 400
+
+/** 사이드바 = '나의 할 일(미진행)' 전용. 담당자에 MY_NAME 이 포함된 draft·published Todo만.
+ *  체크됨·완료는 Todo 체크 탭에서 관리하므로 여기 뜨지 않는다. */
+interface MyTodo {
+  id: string
+  title: string
+  status: 'draft' | 'published'
+  taskDate: string
+  projectName: string
+}
+interface RawTodo {
+  id: string
+  title: string
+  status: string
+  projects: { name: string } | null
+  tasks: { task_date: string } | null
+  todo_assignees: { people: { name: string } | null }[] | null
+}
+
+const md = (d: string | null) => {
+  if (!d) return ''
+  const [, m, day] = d.slice(0, 10).split('-')
+  return `${+m}/${+day}`
+}
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { id: activePjtId } = useParams()
   const [width, setWidth] = useState(() => {
     const w = Number(localStorage.getItem(SIDEBAR_KEY))
-    return w ? Math.min(MAX_W, Math.max(MIN_W, w)) : 208
+    return w ? Math.min(MAX_W, Math.max(MIN_W, w)) : 268
   })
-  const [divisions, setDivisions] = useState<Division[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [dragId, setDragId] = useState<string | null>(null) // 드래그 중인 PJT
-  const [dropId, setDropId] = useState<string | null>(null) // 위에 올라간 대상 PJT
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}')
-    } catch {
-      return {}
-    }
-  })
+  const [todos, setTodos] = useState<MyTodo[]>([])
 
-  // 마운트·라우트 이동 시 로드 + 데이터 변경 이벤트 구독 (등록/편집/삭제·상태변경 즉시 반영)
   useEffect(() => {
-    void loadTree()
+    void loadMyTodos()
   }, [location.pathname])
 
   useEffect(() => {
-    const onChange = () => void loadTree()
+    const onChange = () => void loadMyTodos()
     window.addEventListener(DATA_CHANGED, onChange)
     return () => window.removeEventListener(DATA_CHANGED, onChange)
   }, [])
 
-  async function loadTree() {
-    // 구분과 프로젝트 로드를 분리한다. 프로젝트가 없거나 로드에 실패하더라도
-    // '구분'은 항상 사이드바에 떠 있어야 하므로 서로의 실패에 영향받지 않게 한다.
-    const [divRes, pjtRes] = await Promise.allSettled([
-      supabase.from('divisions').select('*').order('sort_order'),
-      // select('*') 로 받아 migrations/004(sidebar_sort) 미적용이어도 깨지지 않게 한다.
-      supabase.from('projects').select('*').neq('status', 'done'),
-    ])
-    if (divRes.status === 'fulfilled') {
-      setDivisions((divRes.value.data as Division[]) ?? [])
-    } else {
-      console.error('[Sidebar] 구분 로드 실패', divRes.reason)
+  async function loadMyTodos() {
+    const { data, error } = await supabase
+      .from('todos')
+      .select('id, title, status, projects(name), tasks(task_date), todo_assignees(people(name))')
+      .in('status', ['draft', 'published'])
+    if (error) {
+      console.error('[Sidebar] 나의 할 일 로드 실패', error)
+      return
     }
-    if (pjtRes.status === 'fulfilled') {
-      setProjects((pjtRes.value.data as Project[]) ?? [])
-    } else {
-      console.error('[Sidebar] 프로젝트 로드 실패', pjtRes.reason)
+    const rows: MyTodo[] = []
+    for (const t of (data as unknown as RawTodo[]) ?? []) {
+      const mine = (t.todo_assignees ?? []).some((a) => a.people?.name === MY_NAME)
+      if (!mine) continue
+      rows.push({
+        id: t.id,
+        title: t.title,
+        status: t.status === 'draft' ? 'draft' : 'published',
+        taskDate: t.tasks?.task_date ?? '',
+        projectName: t.projects?.name ?? '(프로젝트 없음)',
+      })
     }
+    // Task 작성일 오래된순 — 묵힌 일이 위로
+    rows.sort((a, b) => (a.taskDate || '9999').localeCompare(b.taskDate || '9999'))
+    setTodos(rows)
   }
 
-  const toggle = (divId: string) => {
-    setCollapsed((prev) => {
-      const next = { ...prev, [divId]: !prev[divId] }
-      localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next))
-      return next
-    })
-  }
-
-  // 구분 내 PJT 목록 (사이드바 정렬값 → 이름 순)
-  const pjtsOf = (divId: string) =>
-    projects
-      .filter((p) => p.division_id === divId)
-      .sort(
-        (a, b) =>
-          (a.sidebar_sort ?? 0) - (b.sidebar_sort ?? 0) || a.name.localeCompare(b.name, 'ko'),
-      )
-
-  // ---- 드래그 정렬 (같은 구분 내에서만) ----
-  async function handleDrop(divId: string, targetId: string) {
-    const from = dragId
-    setDragId(null)
-    setDropId(null)
-    if (!from || from === targetId) return
-    // 대상이 같은 구분인지 확인
-    const target = projects.find((p) => p.id === targetId)
-    const moving = projects.find((p) => p.id === from)
-    if (!target || !moving || target.division_id !== divId || moving.division_id !== divId) return
-
-    const ordered = pjtsOf(divId)
-    const fromIdx = ordered.findIndex((p) => p.id === from)
-    const toIdx = ordered.findIndex((p) => p.id === targetId)
-    if (fromIdx < 0 || toIdx < 0) return
-    const arr = [...ordered]
-    const [m] = arr.splice(fromIdx, 1)
-    arr.splice(toIdx, 0, m)
-
-    // 로컬 상태에 sidebar_sort 재부여 (즉시 반영)
-    const rank = new Map(arr.map((p, i) => [p.id, i]))
-    setProjects((prev) =>
-      prev.map((p) => (rank.has(p.id) ? { ...p, sidebar_sort: rank.get(p.id)! } : p)),
-    )
-
-    // DB 저장
-    try {
-      const results = await Promise.all(
-        arr.map((p, i) => supabase.from('projects').update({ sidebar_sort: i }).eq('id', p.id)),
-      )
-      const err = results.find((r) => r.error)?.error as { code?: string; message?: string } | undefined
-      if (err && (err.code === '42703' || err.code === 'PGRST204' || /sidebar_sort/.test(err.message ?? ''))) {
-        alert('정렬 순서를 저장하지 못했습니다.\nmigrations/004-sidebar-sort.sql 을 적용하세요.')
-        void loadTree()
-      }
-    } catch (e) {
-      console.error('[Sidebar] 정렬 저장 실패', e)
-    }
-  }
+  // Todo 체크 탭으로 점프 → 해당 Task 그룹이 펼쳐지고 그 Todo가 강조된다
+  const jump = (todoId: string) => navigate('/main', { state: { focusTodoId: todoId } })
 
   // ---- 드래그 리사이즈 ----
   const startW = useRef(0)
@@ -157,78 +119,45 @@ export default function Sidebar() {
         >
           프로젝트 관리 툴
         </button>
-        <nav className="flex flex-col gap-0.5 px-2.5">
-          <button
-            onClick={() => navigate('/main')}
-            className="flex items-center gap-[7px] rounded-[7px] bg-primary-light px-[9px] py-[7px] text-left text-[12.5px] font-semibold text-primary-text"
-          >
-            <span className="inline-block h-[5px] w-[5px] rounded-full bg-primary" />
-            전체
-          </button>
-        </nav>
 
-        <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">
-          구분
+        <div className="flex items-center gap-1.5 px-4 pb-2">
+          <span className="text-[12.5px] font-bold text-ink-1">나의 할 일</span>
+          <span className="rounded-full bg-primary-light px-[7px] py-px text-[10.5px] font-semibold text-primary">
+            {todos.length}
+          </span>
         </div>
-        <nav className="flex flex-col gap-px px-2.5 pb-3.5">
-          {divisions.map((div) => {
-            const pjts = pjtsOf(div.id)
-            const open = !collapsed[div.id]
-            return (
-              <div key={div.id}>
-                <button
-                  onClick={() => toggle(div.id)}
-                  className="flex w-full items-center justify-between rounded-[7px] px-[9px] py-[7px] text-left text-sm font-bold text-[#2A2825] hover:bg-hover-bg"
+
+        <nav className="flex flex-col gap-1.5 px-2.5 pb-3">
+          {todos.length === 0 && (
+            <div className="px-1.5 py-2 text-[11.5px] leading-relaxed text-ink-3">
+              미진행 할 일이 없습니다.
+            </div>
+          )}
+          {todos.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => jump(t.id)}
+              title="클릭: Todo 체크 탭에서 열기"
+              className="rounded-lg border border-line bg-white px-[9px] py-2 text-left hover:border-primary hover:bg-primary-light"
+            >
+              <div className="mb-[3px] flex items-start gap-1.5">
+                <span
+                  className={`mt-px flex-shrink-0 rounded px-[5px] py-px text-[10px] font-semibold ${
+                    t.status === 'draft'
+                      ? 'border border-line-strong bg-sidebar-bg text-ink-2'
+                      : 'border border-[#B7E3D3] bg-success-light text-success'
+                  }`}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 text-[10px] text-ink-3">{open ? '▾' : '▸'}</span>
-                    {div.name}
-                  </span>
-                  <span className="text-[10px] font-medium text-ink-4">{pjts.length}</span>
-                </button>
-                {open && pjts.length > 0 && (
-                  <div className="flex flex-col gap-px py-[1px] pb-[3px]">
-                    {pjts.map((p) => (
-                      <button
-                        key={p.id}
-                        draggable
-                        onDragStart={() => setDragId(p.id)}
-                        onDragEnd={() => {
-                          setDragId(null)
-                          setDropId(null)
-                        }}
-                        onDragOver={(e) => {
-                          if (dragId && dragId !== p.id) {
-                            e.preventDefault()
-                            if (dropId !== p.id) setDropId(p.id)
-                          }
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault()
-                          void handleDrop(div.id, p.id)
-                        }}
-                        onClick={() => {
-                          if (!dragId) navigate(`/project/${p.id}`)
-                        }}
-                        title="클릭: 세부화면 · 드래그: 순서 변경"
-                        className={`flex items-center gap-1.5 rounded-md py-[5px] pl-6 pr-[9px] text-left text-[12.5px] hover:bg-hover-bg hover:text-primary ${
-                          activePjtId === p.id ? 'bg-hover-bg font-semibold text-primary' : 'text-ink-1'
-                        } ${dragId === p.id ? 'opacity-40' : ''} ${
-                          dropId === p.id && dragId !== p.id ? 'border-t-2 border-primary' : 'border-t-2 border-transparent'
-                        }`}
-                      >
-                        <span className="h-1 w-1 flex-shrink-0 rounded-[1px] bg-ink-4" />
-                        {priorityIcon(p.is_urgent, p.is_important, p.is_regular) && (
-                          <span className="flex-shrink-0">{priorityIcon(p.is_urgent, p.is_important, p.is_regular)}</span>
-                        )}
-                        <span className="truncate">{p.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {t.status === 'draft' ? '미배포' : '배포'}
+                </span>
+                <span className="min-w-0 text-[12px] leading-snug text-ink-1">{t.title}</span>
               </div>
-            )
-          })}
+              <div className="truncate pl-[3px] text-[10.5px] text-ink-3">
+                {t.projectName}
+                {t.taskDate && ` · ${md(t.taskDate)}`}
+              </div>
+            </button>
+          ))}
         </nav>
 
         <div className="mt-auto border-t border-line p-2">
