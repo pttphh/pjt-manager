@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { emitDataChanged } from '../lib/events'
 import { MY_NAME } from '../lib/config'
 import type { Division, TodoStatus } from '../types'
 
@@ -112,6 +113,8 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
   const [memoInputs, setMemoInputs] = useState<Record<string, string>>({})
   // 저장된 메모 수정 중 상태 (메모 id + 편집 내용)
   const [editingMemo, setEditingMemo] = useState<{ id: string; content: string } | null>(null)
+  // Todo 내용 수정 중 상태 (todo id + 편집 제목)
+  const [editingTodo, setEditingTodo] = useState<{ id: string; title: string } | null>(null)
   const savingRef = useRef<Set<string>>(new Set()) // 저장/체크 연타 방지
   // 점프 대상 강조 + 스크롤용 ref
   const [highlightId, setHighlightId] = useState<string | null>(null)
@@ -120,6 +123,13 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
   useEffect(() => {
     void load()
   }, [])
+
+  /** 변경 후 이 탭을 다시 읽고, 사이드바('나의 할 일')에도 알린다.
+   *  이 탭의 체크·완료·메모·내용 수정은 모두 사이드바 목록과 정렬에 영향을 준다. */
+  async function refresh() {
+    await load()
+    emitDataChanged()
+  }
 
   async function load() {
     setLoading(true)
@@ -184,7 +194,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     try {
       await supabase.from('todo_memos').insert({ todo_id: todoId, content })
       setMemoInputs((m) => ({ ...m, [todoId]: '' }))
-      void load()
+      void refresh()
     } finally {
       savingRef.current.delete(todoId)
     }
@@ -208,7 +218,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       // 체크를 거쳤음을 기록 → 나중에 완료를 해제하면 메모 유무와 무관하게 checked 로 복귀
       await setTodoStatus(todoId, 'checked', new Date().toISOString())
       setMemoInputs((m) => ({ ...m, [todoId]: '' }))
-      void load()
+      void refresh()
     } finally {
       savingRef.current.delete(todoId)
     }
@@ -219,23 +229,31 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     if (!c) return
     await supabase.from('todo_memos').update({ content: c }).eq('id', memoId)
     setEditingMemo(null)
-    void load()
+    void refresh()
+  }
+  // Todo 내용(제목) 수정 — 연필 버튼에서 진입. 상태·담당자·PJT는 Task 창에서 바꾼다.
+  async function updateTodoTitle(todoId: string, title: string) {
+    const t = title.trim()
+    if (!t) return
+    await supabase.from('todos').update({ title: t }).eq('id', todoId)
+    setEditingTodo(null)
+    void refresh()
   }
   async function deleteMemo(memoId: string) {
     if (!confirm('이 메모를 삭제할까요?')) return
     await supabase.from('todo_memos').delete().eq('id', memoId)
     setEditingMemo(null)
-    void load()
+    void refresh()
   }
   async function completeTodo(todoId: string) {
     // checked_at 은 그대로 둔다 — 완료를 해제하면 다시 checked 로 돌아가야 하므로
     await setTodoStatus(todoId, 'done')
-    void load()
+    void refresh()
   }
   async function uncheckTodo(todoId: string) {
     // 체크 해제 → 미진행(published) 복귀. 체크 이력도 지운다(메모 이력·배포 상태는 유지)
     await setTodoStatus(todoId, 'published', null)
-    void load()
+    void refresh()
   }
 
   // 그룹의 대표 날짜: 최신순이면 그룹 내 최대 날짜, 오래된순이면 최소 날짜
@@ -512,9 +530,46 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
                         }}
                       >
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
-                          <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
+                          <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex min-w-0 flex-1 items-center gap-2">
                             <StatusBadge status={td.status} />
-                            {td.title}
+                            {editingTodo?.id === td.id ? (
+                              <>
+                                <input
+                                  value={editingTodo.title}
+                                  onChange={(e) => setEditingTodo({ id: td.id, title: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') updateTodoTitle(td.id, editingTodo.title)
+                                    if (e.key === 'Escape') setEditingTodo(null)
+                                  }}
+                                  autoFocus
+                                  style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', border: '1px solid #CFCDC7', borderRadius: 8, padding: '5px 9px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1F1E1B' }}
+                                />
+                                <button
+                                  onClick={() => updateTodoTitle(td.id, editingTodo.title)}
+                                  style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', fontWeight: 600, borderRadius: 7, padding: '4px 11px' }}
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  onClick={() => setEditingTodo(null)}
+                                  title="취소"
+                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', color: '#B4B1A9', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', padding: '0 2px', lineHeight: 1 }}
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="min-w-0">{td.title}</span>
+                                <button
+                                  onClick={() => setEditingTodo({ id: td.id, title: td.title })}
+                                  title="Todo 내용 수정"
+                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1, opacity: 0.65 }}
+                                >
+                                  ✏️
+                                </button>
+                              </>
+                            )}
                           </span>
                           <span style={{ flex: '0 0 auto', fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>
                             {td.metaLabel}: {td.metaValue}
@@ -665,9 +720,46 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
                         }}
                       >
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
-                          <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex items-center gap-2">
+                          <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex min-w-0 flex-1 items-center gap-2">
                             <StatusBadge status={td.status} />
-                            {td.title}
+                            {editingTodo?.id === td.id ? (
+                              <>
+                                <input
+                                  value={editingTodo.title}
+                                  onChange={(e) => setEditingTodo({ id: td.id, title: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') updateTodoTitle(td.id, editingTodo.title)
+                                    if (e.key === 'Escape') setEditingTodo(null)
+                                  }}
+                                  autoFocus
+                                  style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', border: '1px solid #CFCDC7', borderRadius: 8, padding: '5px 9px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1F1E1B' }}
+                                />
+                                <button
+                                  onClick={() => updateTodoTitle(td.id, editingTodo.title)}
+                                  style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', fontWeight: 600, borderRadius: 7, padding: '4px 11px' }}
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  onClick={() => setEditingTodo(null)}
+                                  title="취소"
+                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', color: '#B4B1A9', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', padding: '0 2px', lineHeight: 1 }}
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="min-w-0">{td.title}</span>
+                                <button
+                                  onClick={() => setEditingTodo({ id: td.id, title: td.title })}
+                                  title="Todo 내용 수정"
+                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1, opacity: 0.65 }}
+                                >
+                                  ✏️
+                                </button>
+                              </>
+                            )}
                           </span>
                           <span style={{ flex: '0 0 auto', fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>
                             {td.metaLabel}: {td.metaValue}
