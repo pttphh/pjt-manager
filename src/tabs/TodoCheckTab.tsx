@@ -119,6 +119,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
   // 점프 대상 강조 + 스크롤용 ref
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const todoRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const focusTimersRef = useRef<number[]>([]) // 점프 스크롤 재시도 타이머 (언마운트 때만 정리)
 
   useEffect(() => {
     void load()
@@ -385,19 +386,24 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       })
     }
     setHighlightId(focusTodoId)
+    // 그룹을 방금 펼쳤거나 탭이 막 마운트된 경우 DOM 반영이 늦으므로 여러 번 재시도한다.
+    // behavior:'smooth' 는 렌더가 멈춘 탭에서 스크롤이 아예 일어나지 않아 쓰지 않는다.
+    //
+    // 타이머는 이 effect 의 cleanup 으로 지우면 안 된다 — 바로 아래 onFocusDone() 이
+    // 부모의 focusTodoId 를 null 로 만들어 effect 가 재실행되고, 그 cleanup 이
+    // 스크롤 재시도를 전부 취소해 버린다(= 스크롤이 안 되던 원인). 언마운트 때만 정리한다.
+    ;[0, 60, 180, 400, 800, 1400].forEach((ms) => {
+      focusTimersRef.current.push(
+        window.setTimeout(() => todoRefs.current[focusTodoId]?.scrollIntoView({ block: 'center' }), ms),
+      )
+    })
+    focusTimersRef.current.push(window.setTimeout(() => setHighlightId(null), 2600))
     onFocusDone?.()
-    // 그룹을 방금 펼친 경우 DOM 반영이 한 박자 늦으므로 몇 번 재시도한다.
-    // behavior:'smooth' 는 탭이 화면에 없거나 렌더가 멈춘 상황에서 스크롤이 아예 일어나지 않아 쓰지 않는다.
-    const tries = [0, 60, 180, 400].map((ms) =>
-      setTimeout(() => todoRefs.current[focusTodoId]?.scrollIntoView({ block: 'center' }), ms),
-    )
-    const timer = setTimeout(() => setHighlightId(null), 2600)
-    return () => {
-      tries.forEach(clearTimeout)
-      clearTimeout(timer)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusTodoId, loading, items])
+
+  // 점프용 타이머는 언마운트 시에만 정리
+  useEffect(() => () => focusTimersRef.current.forEach(clearTimeout), [])
   const isOpen = (key: string) => !collapsed[key]
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
 
