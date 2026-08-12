@@ -14,6 +14,8 @@ interface TaskModalProps {
   divisionId: string
   /** 있으면 기존 Task 편집, 없으면 신규. */
   taskId?: string | null
+  /** 세부화면 Tasks 칸의 실측 폭(CSS px). 넓은 화면에서 패널 폭으로 사용해 그 칸을 정확히 덮는다. */
+  widthPx?: number | null
 }
 
 interface TodoRow {
@@ -64,6 +66,7 @@ export default function TaskModal({
   projectName,
   divisionId,
   taskId,
+  widthPx,
 }: TaskModalProps) {
   const isEdit = !!taskId
   const [title, setTitle] = useState('')
@@ -381,10 +384,13 @@ export default function TaskModal({
       {/* 배경: 클릭해도 닫히지 않음(작성 중 내용 보호) */}
       <div className="animate-overlay-in absolute inset-0 bg-[rgba(31,30,27,0.4)]" />
 
-      {/* 넓은 화면(≥lg): 우측 사이드 패널(680px). 분할·좁은 화면(<lg): 전체화면.
-          full-screen 폭은 w-full(고정 부모 100%)로 잡아야 함 — 100vw는 #root zoom(1.15)에 부풀려져 오버플로우한다.
-          lg 폭 상한도 같은 이유로 zoom 배율만큼 보정. */}
-      <div className="animate-drawer-in absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)] lg:w-[500px] lg:max-w-[calc(94vw/var(--app-zoom))]">
+      {/* 넓은 화면(≥lg): 우측 사이드 패널 — 폭은 세부화면 Tasks 칸 실측값(widthPx), 없으면 500px.
+          분할·좁은 화면(<lg): 전체화면. full-screen 폭은 w-full(고정 부모 100%)로 잡아야 함 —
+          100vw는 #root zoom(1.15)에 부풀려져 오버플로우한다. lg 폭 상한도 같은 이유로 zoom 배율만큼 보정. */}
+      <div
+        style={{ '--drawer-w': `${widthPx ?? 500}px` } as React.CSSProperties}
+        className="animate-drawer-in absolute inset-y-0 right-0 flex w-full flex-col bg-white shadow-[-8px_0_28px_rgba(0,0,0,0.14)] lg:w-[var(--drawer-w)] lg:min-w-[500px] lg:max-w-[calc(94vw/var(--app-zoom))]"
+      >
         {/* 헤더 (고정) */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-line px-[22px] py-3.5">
           <div>

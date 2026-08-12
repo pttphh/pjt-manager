@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import ProjectFormModal from '../components/project/ProjectFormModal'
@@ -61,6 +61,9 @@ export default function ProjectDetailPage() {
   const [todos, setTodos] = useState<DetailTodo[]>([])
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
+  // Tasks 칸의 실측 폭 → Task 사이드 패널 폭으로 사용 (패널이 이 칸을 정확히 덮도록)
+  const tasksRef = useRef<HTMLElement | null>(null)
+  const [tasksWidth, setTasksWidth] = useState<number | null>(null)
   const [taskModal, setTaskModal] = useState<{ open: boolean; taskId: string | null }>({
     open: false,
     taskId: null,
@@ -74,6 +77,23 @@ export default function ProjectDetailPage() {
     if (id) void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Tasks 칸 폭 추적 (창 크기 변경에도 사이드 패널 폭이 따라오도록).
+  // offsetWidth 는 #root 의 zoom 영향을 받지 않는 CSS px 이라 패널의 w-[..px] 와 같은 단위다.
+  useEffect(() => {
+    const el = tasksRef.current
+    if (!el) return
+    const measure = () => setTasksWidth(el.offsetWidth || null)
+    measure()
+    // 창 리사이즈(분할 등)와 사이드바 드래그 양쪽을 모두 잡는다.
+    window.addEventListener('resize', measure)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(el)
+    return () => {
+      window.removeEventListener('resize', measure)
+      ro?.disconnect()
+    }
+  }, [loading])
 
   async function load() {
     setLoading(true)
@@ -348,9 +368,9 @@ export default function ProjectDetailPage() {
 
         {/* 좌: Todo / 우: Tasks — Task 사이드 패널(우측 drawer)이 열려도 좌측 Todo가 가려지지 않도록 */}
         <div className="flex items-start gap-4">
-          {/* Todo — 남는 폭을 모두 차지. 좁은 화면에선 min-w 아래로 내려가지 않고 대신 Tasks가 줄어든다 */}
+          {/* Todo — Tasks와 정확히 같은 폭(1:1) */}
           <section
-            className="min-w-[360px] rounded-xl"
+            className="min-w-0 rounded-xl"
             style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
           >
             <p
@@ -503,10 +523,11 @@ export default function ProjectDetailPage() {
             </p>
           </section>
 
-          {/* Tasks — 폭을 Task 사이드 패널(500px)과 동일하게. 패널이 열리면 이 칸만 덮이고 좌측 Todo는 온전히 보인다 */}
+          {/* Tasks — Todo와 정확히 같은 폭(1:1). 이 칸의 실측 폭을 Task 사이드 패널에 넘겨 패널이 이 칸을 그대로 덮게 한다 */}
           <section
+            ref={tasksRef}
             className="min-w-0 rounded-xl"
-            style={{ flex: '0 1 500px', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
           >
             <p
               className="text-[13px] font-bold text-ink-1"
@@ -572,6 +593,8 @@ export default function ProjectDetailPage() {
       <TaskModal
         open={taskModal.open}
         taskId={taskModal.taskId}
+        /* Tasks 칸 폭 + 우측 페이지 여백(28px) → 패널이 Tasks 칸을 정확히 덮는다 */
+        widthPx={tasksWidth ? tasksWidth + 28 : null}
         projectId={project.id}
         projectName={project.name}
         divisionId={project.division_id}

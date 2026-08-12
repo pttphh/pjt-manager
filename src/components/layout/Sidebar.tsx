@@ -140,16 +140,14 @@ export default function Sidebar() {
               title="클릭: Todo 체크 탭에서 열기"
               className="rounded-lg border border-line bg-white px-[9px] py-2 text-left hover:border-primary hover:bg-primary-light"
             >
+              {/* 내 Todo는 이제 생성 즉시 배포되므로 '배포' 뱃지는 표시하지 않는다.
+                  아직 남아 있는 미배포 건만 눈에 띄게 '미배포'로 표시. */}
               <div className="mb-[3px] flex items-start gap-1.5">
-                <span
-                  className={`mt-px flex-shrink-0 rounded px-[5px] py-px text-[10px] font-semibold ${
-                    t.status === 'draft'
-                      ? 'border border-line-strong bg-sidebar-bg text-ink-2'
-                      : 'border border-[#B7E3D3] bg-success-light text-success'
-                  }`}
-                >
-                  {t.status === 'draft' ? '미배포' : '배포'}
-                </span>
+                {t.status === 'draft' && (
+                  <span className="mt-px flex-shrink-0 rounded border border-line-strong bg-sidebar-bg px-[5px] py-px text-[10px] font-semibold text-ink-2">
+                    미배포
+                  </span>
+                )}
                 <span className="min-w-0 text-[12px] leading-snug text-ink-1">{t.title}</span>
               </div>
               <div className="truncate pl-[3px] text-[10.5px] text-ink-3">

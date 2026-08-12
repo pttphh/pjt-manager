@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { MY_NAME } from '../lib/config'
 import type { Division, TodoStatus } from '../types'
 
-type ViewMode = 'task' | 'person'
+type ViewMode = 'pjt' | 'task' | 'person'
 // 정렬: Task 작성일 기준 최신순/오래된순
 type SortOrder = 'newest' | 'oldest'
 /** 이 탭에 노출되는 Todo 상태.
@@ -21,6 +21,7 @@ interface TodoItem {
   taskTitle: string
   taskDate: string
   taskProjectName: string
+  todoProjectId: string
   todoProjectName: string
   divisionId: string
   assignees: string[]
@@ -37,7 +38,7 @@ interface RawTask {
         id: string
         title: string
         status: string
-        projects: { name: string; division_id: string } | null
+        projects: { id: string; name: string; division_id: string } | null
         todo_assignees: { people: { name: string } | null }[] | null
         todo_memos: { id: string; content: string; created_at: string }[] | null
       }[]
@@ -98,7 +99,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
   const [divisions, setDivisions] = useState<Division[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all') // division id | 'all'
-  const [view, setView] = useState<ViewMode>('task')
+  const [view, setView] = useState<ViewMode>('pjt') // 기본 = PJT별 (이 탭의 메인 화면)
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest') // Task 작성일 기준 정렬
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   // 미진행 Todo별 진행사항 메모 입력값 (Todo id → 문자열). 저장 후 칸이 비워져 다음 메모를 바로 이어 쓴다.
@@ -123,7 +124,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
         supabase
           .from('tasks')
           .select(
-            'id, title, task_date, projects(name), todos(id, title, status, projects(name, division_id), todo_assignees(people(name)), todo_memos(id, content, created_at))',
+            'id, title, task_date, projects(name), todos(id, title, status, projects(id, name, division_id), todo_assignees(people(name)), todo_memos(id, content, created_at))',
           ),
       ])
       setDivisions((divData as Division[]) ?? [])
@@ -151,6 +152,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
             taskTitle: t.title,
             taskDate: t.task_date,
             taskProjectName: t.projects?.name ?? '(프로젝트 없음)',
+            todoProjectId: td.projects?.id ?? '',
             todoProjectName: td.projects?.name ?? '(프로젝트 없음)',
             divisionId: td.projects?.division_id ?? '',
             assignees,
@@ -260,6 +262,31 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       (it) => inSection(it.status) && (filter === 'all' || it.divisionId === filter),
     )
     const status = section
+    if (view === 'pjt') {
+      // PJT 단위 아코디언 — 기준은 todo.project_id(Todo가 속한 PJT, Task의 PJT가 아님)
+      const order: { id: string; name: string }[] = []
+      filtered.forEach((it) => {
+        if (!order.some((o) => o.id === it.todoProjectId))
+          order.push({ id: it.todoProjectId, name: it.todoProjectName })
+      })
+      return sortGroups(
+        order.map((pjt) => {
+          const todos = filtered.filter((it) => it.todoProjectId === pjt.id)
+          return {
+            key: `j:${status}:${pjt.id}`,
+            name: pjt.name,
+            metaLine: '',
+            count: todos.length,
+            sortDate: groupDate(todos),
+            todos: todos.map((it) => ({
+              ...it,
+              metaLabel: '담당',
+              metaValue: it.assignees.join(', ') || '—',
+            })),
+          }
+        }),
+      )
+    }
     if (view === 'person') {
       const people: string[] = []
       filtered.forEach((it) => it.assignees.forEach((p) => !people.includes(p) && people.push(p)))
@@ -386,7 +413,10 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
             <div className="flex flex-shrink-0 items-center gap-[7px]">
               <span style={{ fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>보기 기준</span>
               <div style={{ display: 'flex', border: '1px solid #CFCDC7', borderRadius: 8, overflow: 'hidden' }}>
-                <button style={seg(view === 'task', false)} onClick={() => setView('task')}>
+                <button style={seg(view === 'pjt', false)} onClick={() => setView('pjt')}>
+                  PJT별
+                </button>
+                <button style={seg(view === 'task', true)} onClick={() => setView('task')}>
                   Task별
                 </button>
                 <button style={seg(view === 'person', true)} onClick={() => setView('person')}>
