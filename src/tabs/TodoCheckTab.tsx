@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { emitDataChanged } from '../lib/events'
-import { MY_NAME } from '../lib/config'
 import type { Division, TodoStatus } from '../types'
 
 type ViewMode = 'pjt' | 'task' | 'person'
 // 정렬: Task 작성일 기준 최신순/오래된순
 type SortOrder = 'newest' | 'oldest'
-/** 이 탭에 노출되는 Todo 상태.
- *  미진행 구간 = draft | published, 체크됨 구간 = checked. done 은 제거.
- *  draft 는 원래 미노출이지만 **담당자가 MY_NAME 인 Todo만 예외로 노출**한다
- *  (자기 자신에게 배포할 이유가 없으므로 — 사이드바 '나의 할 일'과 짝을 이룬다). */
-type ShownStatus = 'draft' | 'published' | 'checked'
+/** 이 탭에 노출되는 Todo 상태 — **배포된 것만**(담당자 무관).
+ *  미진행 구간 = published, 체크됨 구간 = checked. draft(미배포)·done 은 노출하지 않는다. */
+type ShownStatus = 'published' | 'checked'
 type Section = 'open' | 'checked'
 
 interface TodoItem {
@@ -68,14 +65,12 @@ const md = (d: string | null) => {
   return isNaN(dt.getTime()) ? '' : `${dt.getMonth() + 1}/${dt.getDate()}`
 }
 
-// 단일 상태 뱃지 (Todo 자체 상태 기준): 미배포(draft) → 배포(published) → 체크(checked)
+// 단일 상태 뱃지 (Todo 자체 상태 기준): 배포(published) → 체크(checked)
 function StatusBadge({ status }: { status: ShownStatus }) {
   const s =
     status === 'checked'
       ? { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '체크' }
-      : status === 'draft'
-        ? { bg: '#F1F0EC', fg: '#55534E', bd: '#DAD8D2', label: '미배포' }
-        : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
+      : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
   return (
     <span
       style={{
@@ -137,7 +132,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     try {
       const [{ data: divData }, { data: taskData }] = await Promise.all([
         supabase.from('divisions').select('*').order('sort_order'),
-        // 노출 기준: published·checked 전부 + draft 는 담당자가 MY_NAME 인 것만. done 제거.
+        // 노출 기준: todos.status in ('published','checked') — 미배포(draft)·완료(done)는 제외
         supabase
           .from('tasks')
           .select(
@@ -149,15 +144,11 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       const flat: TodoItem[] = []
       for (const t of (taskData as unknown as RawTask[]) ?? []) {
         for (const td of t.todos ?? []) {
+          // 배포된 것만 — 담당자가 누구든 미배포는 배포 탭에서 배포해야 여기 올라온다
+          if (td.status !== 'published' && td.status !== 'checked') continue
           const assignees = (td.todo_assignees ?? [])
             .map((a) => a.people?.name)
             .filter(Boolean) as string[]
-          // draft 는 내 담당일 때만 노출 (자기 자신에게 배포할 이유가 없으므로)
-          const shown =
-            td.status === 'published' ||
-            td.status === 'checked' ||
-            (td.status === 'draft' && assignees.includes(MY_NAME))
-          if (!shown) continue
           const memos = (td.todo_memos ?? [])
             .slice()
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -281,7 +272,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
   }
 
   function buildGroups(section: Section): Group[] {
-    // 미진행 구간 = draft(내 담당만 로드됨) + published, 체크됨 구간 = checked
+    // 미진행 구간 = published, 체크됨 구간 = checked
     const inSection = (s: ShownStatus) => (section === 'checked' ? s === 'checked' : s !== 'checked')
     const filtered = items.filter(
       (it) => inSection(it.status) && (filter === 'all' || it.divisionId === filter),

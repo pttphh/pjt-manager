@@ -8,12 +8,11 @@ const SIDEBAR_KEY = 'pm_sidebar_w'
 const MIN_W = 220
 const MAX_W = 400
 
-/** 사이드바 = '나의 할 일(미진행)' 전용. 담당자에 MY_NAME 이 포함된 draft·published Todo만.
- *  체크됨·완료는 Todo 체크 탭에서 관리하므로 여기 뜨지 않는다. */
+/** 사이드바 = '나의 할 일(미진행)' 전용. 담당자에 MY_NAME 이 포함된 **배포된(published)** Todo만.
+ *  미배포는 배포 탭에서 배포해야 올라오고, 체크됨·완료는 Todo 체크 탭에서 관리한다. */
 interface MyTodo {
   id: string
   title: string
-  status: 'draft' | 'published'
   /** 정렬·표시 기준일 = 마지막 진행사항 메모 날짜, 없으면 Todo 등록일 */
   activityDate: string
   projectName: string
@@ -21,7 +20,6 @@ interface MyTodo {
 interface RawTodo {
   id: string
   title: string
-  status: string
   created_at: string | null
   projects: { name: string } | null
   todo_assignees: { people: { name: string } | null }[] | null
@@ -62,8 +60,8 @@ export default function Sidebar() {
   async function loadMyTodos() {
     const { data, error } = await supabase
       .from('todos')
-      .select('id, title, status, created_at, projects(name), todo_assignees(people(name)), todo_memos(created_at)')
-      .in('status', ['draft', 'published'])
+      .select('id, title, created_at, projects(name), todo_assignees(people(name)), todo_memos(created_at)')
+      .eq('status', 'published')
     if (error) {
       console.error('[Sidebar] 나의 할 일 로드 실패', error)
       return
@@ -81,7 +79,6 @@ export default function Sidebar() {
       rows.push({
         id: t.id,
         title: t.title,
-        status: t.status === 'draft' ? 'draft' : 'published',
         activityDate: lastMemo ?? t.created_at ?? '',
         projectName: t.projects?.name ?? '(프로젝트 없음)',
       })
@@ -154,14 +151,8 @@ export default function Sidebar() {
               title="클릭: Todo 체크 탭에서 열기"
               className="rounded-lg border border-line bg-white px-[9px] py-2 text-left hover:border-primary hover:bg-primary-light"
             >
-              {/* 내 Todo는 이제 생성 즉시 배포되므로 '배포' 뱃지는 표시하지 않는다.
-                  아직 남아 있는 미배포 건만 눈에 띄게 '미배포'로 표시. */}
+              {/* 배포된 Todo만 오므로 상태 뱃지는 두지 않는다 */}
               <div className="mb-[3px] flex items-start gap-1.5">
-                {t.status === 'draft' && (
-                  <span className="mt-px flex-shrink-0 rounded border border-line-strong bg-sidebar-bg px-[5px] py-px text-[10px] font-semibold text-ink-2">
-                    미배포
-                  </span>
-                )}
                 <span className="min-w-0 text-[12px] leading-snug text-ink-1">{t.title}</span>
               </div>
               <div className="truncate pl-[3px] text-[10.5px] text-ink-3">
