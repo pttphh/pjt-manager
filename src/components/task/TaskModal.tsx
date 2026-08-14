@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button'
 import TagInput from '../ui/TagInput'
 import { supabase } from '../../lib/supabase'
-import type { Person, TodoStatus } from '../../types'
-import { assignedToMe, initialTodoStatus } from '../../lib/todoStatus'
+import type { Person } from '../../types'
 
 interface TaskModalProps {
   open: boolean
@@ -24,8 +23,6 @@ interface TodoRow {
   title: string
   assigneeIds: string[]
   projectId: string
-  /** 기존 Todo의 현재 상태 — 미배포(draft)에 내가 담당으로 들어올 때만 배포로 올리기 위해 필요 */
-  status?: TodoStatus
 }
 interface PjtOpt {
   id: string
@@ -106,7 +103,7 @@ export default function TaskModal({
       const { data } = await supabase
         .from('tasks')
         .select(
-          '*, task_members(people(id,name)), todos(id,title,status,project_id,sort_order,todo_assignees(person_id))',
+          '*, task_members(people(id,name)), todos(id,title,project_id,sort_order,todo_assignees(person_id))',
         )
         .eq('id', taskId)
         .single()
@@ -117,22 +114,13 @@ export default function TaskModal({
         const rows: TodoRow[] = (data.todos ?? [])
           .slice()
           .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
-          .map(
-            (t: {
-              id: string
-              title: string
-              status: TodoStatus
-              project_id: string
-              todo_assignees: { person_id: string }[]
-            }) => ({
-              key: t.id,
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              projectId: t.project_id,
-              assigneeIds: (t.todo_assignees ?? []).map((x) => x.person_id),
-            }),
-          )
+          .map((t: { id: string; title: string; project_id: string; todo_assignees: { person_id: string }[] }) => ({
+            key: t.id,
+            id: t.id,
+            title: t.title,
+            projectId: t.project_id,
+            assigneeIds: (t.todo_assignees ?? []).map((x) => x.person_id),
+          }))
         const dt = data.task_date ?? todayStr()
         const dec = data.decisions ?? ''
         const lks = (data.link_urls as string[] | null) ?? []
@@ -320,17 +308,10 @@ export default function TaskModal({
         const t = todos[i]
         const asg = t.assigneeIds.filter((id) => memberIds.has(id))
         if (t.id) {
-          // 미배포 Todo에 내가 담당자로 들어오면 그 자리에서 배포 상태로 올린다 (규칙12).
-          // 이미 배포·체크·완료된 Todo의 상태는 건드리지 않는다.
-          const promote = t.status === 'draft' && assignedToMe(asg, members)
+          // 상태는 건드리지 않는다 — 배포는 배포 탭에서만 (담당자와 무관하게 모든 Todo가 배포를 거친다)
           await supabase
             .from('todos')
-            .update({
-              title: t.title.trim(),
-              project_id: t.projectId,
-              sort_order: i,
-              ...(promote ? { status: 'published', deployed_at: new Date().toISOString() } : null),
-            })
+            .update({ title: t.title.trim(), project_id: t.projectId, sort_order: i })
             .eq('id', t.id)
           await supabase.from('todo_assignees').delete().eq('todo_id', t.id)
           if (asg.length)
@@ -339,14 +320,14 @@ export default function TaskModal({
               .insert(asg.map((pid) => ({ todo_id: t.id, person_id: pid })))
         } else {
           if (!t.title.trim()) continue
-          // 내 담당이면 처음부터 배포 상태로 생성 (규칙12)
+          // 새 Todo는 담당자와 무관하게 항상 draft — 배포 탭에서 배포해야 진행 단계로 넘어간다
           const { data: nt } = await supabase
             .from('todos')
             .insert({
               task_id: tid,
               project_id: t.projectId,
               title: t.title.trim(),
-              ...initialTodoStatus(asg, members),
+              status: 'draft',
               sort_order: i,
             })
             .select()

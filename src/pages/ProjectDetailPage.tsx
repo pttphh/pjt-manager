@@ -7,7 +7,6 @@ import { supabase } from '../lib/supabase'
 import { emitDataChanged } from '../lib/events'
 import { tagSwatch } from '../lib/colors'
 import { STATUS_CARD_STYLE, projectColor } from '../types'
-import { initialTodoStatus } from '../lib/todoStatus'
 import type { Person, ProjectStatus, Tag, Task, TodoStatus } from '../types'
 
 const STATUS_META = STATUS_CARD_STYLE // 상태 라벨/색 단일 소스
@@ -217,12 +216,10 @@ export default function ProjectDetailPage() {
     }
     if (!miscId) return
     const maxSort = todos.reduce((m, t) => Math.max(m, t.sort_order), 0)
-    // 내 담당이면 처음부터 배포 상태로 (규칙12 — 자기 자신에게 배포할 이유가 없다)
-    const people = (project.project_members ?? []).map((pm) => pm.people).filter(Boolean)
-    const init = initialTodoStatus(newTodoAssignees, people)
+    // 담당자와 무관하게 항상 draft — 배포 탭에서 배포해야 진행 단계로 넘어간다
     const { data: newTodo } = await supabase
       .from('todos')
-      .insert({ task_id: miscId, project_id: project.id, title, ...init, sort_order: maxSort + 1 })
+      .insert({ task_id: miscId, project_id: project.id, title, status: 'draft', sort_order: maxSort + 1 })
       .select()
       .single()
     if (newTodo && newTodoAssignees.length) {
