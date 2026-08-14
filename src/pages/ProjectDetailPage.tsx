@@ -192,19 +192,36 @@ export default function ProjectDetailPage() {
     await supabase.from('todos').delete().eq('id', todo.id)
   }
 
+  /** 체크박스 = **'체크(checked)' 토글**. 완료(done)는 여기서 만들지 않는다 —
+   *  체크된 것을 모아 완료 처리하는 일은 Todo 체크 탭에서만 한다.
+   *  - 미체크(draft·published) → checked (+ checked_at 기록)
+   *  - checked → 해제: 배포됐으면 published, 미배포면 draft (+ checked_at 지움)
+   *  - done → 해제(완료 취소): 체크 이력이 있으면 checked 로 복귀 */
   async function toggleTodo(todo: DetailTodo) {
-    // 체크 → done. 해제 → 체크 단계를 거쳤으면 checked, 아니면 배포됐으면 published, 미배포면 draft.
-    // (메모 유무로 추정하지 않는다 — 메모 없이도 체크가 가능하므로. migrations/010)
-    const next: TodoStatus =
-      todo.status === 'done'
-        ? todo.checkedAt
-          ? 'checked'
-          : todo.deployedAt
-            ? 'published'
-            : 'draft'
-        : 'done'
-    setTodos((ts) => ts.map((t) => (t.id === todo.id ? { ...t, status: next } : t)))
-    await supabase.from('todos').update({ status: next }).eq('id', todo.id)
+    let next: TodoStatus
+    let nextCheckedAt: string | null
+    if (todo.status === 'done') {
+      next = todo.checkedAt ? 'checked' : todo.deployedAt ? 'published' : 'draft'
+      nextCheckedAt = todo.checkedAt
+    } else if (todo.status === 'checked') {
+      next = todo.deployedAt ? 'published' : 'draft'
+      nextCheckedAt = null
+    } else {
+      next = 'checked'
+      nextCheckedAt = new Date().toISOString()
+    }
+    setTodos((ts) =>
+      ts.map((t) => (t.id === todo.id ? { ...t, status: next, checkedAt: nextCheckedAt } : t)),
+    )
+    // migrations/010(checked_at) 미적용 시에도 상태 변경은 되도록 폴백
+    const { error } = await supabase
+      .from('todos')
+      .update({ status: next, checked_at: nextCheckedAt })
+      .eq('id', todo.id)
+    if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+      await supabase.from('todos').update({ status: next }).eq('id', todo.id)
+    }
+    emitDataChanged() // 사이드바 '나의 할 일'은 published 만 보여주므로 즉시 갱신 필요
   }
 
   // 우측 패널에서 단발성 Todo 등록 → 이 PJT의 "기타"(is_misc) Task에 붙인다.
@@ -529,7 +546,12 @@ export default function ProjectDetailPage() {
                 return (
                   <div key={t.id} className="group mb-1.5 flex items-start justify-between gap-2">
                     <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 text-[12.5px]">
-                      <input type="checkbox" checked={false} onChange={() => toggleTodo(t)} className="mt-0.5" />
+                      <input
+                        type="checkbox"
+                        checked={t.status === 'checked'}
+                        onChange={() => toggleTodo(t)}
+                        className="mt-0.5"
+                      />
                       <span className="min-w-0">
                         {t.title}
                         {t.assignees.length > 0 && (
@@ -579,7 +601,7 @@ export default function ProjectDetailPage() {
               })}
             </div>
             <p className="mt-3 text-[10px] text-ink-3">
-              체크 → 완료 · 해제 → 메모 있으면 '체크', 없으면 '미진행' 복귀
+              체크박스 = '체크'까지만 · 완료 처리는 Todo 체크 탭에서
             </p>
           </section>
 
