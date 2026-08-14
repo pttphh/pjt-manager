@@ -34,10 +34,10 @@
   }
 }
 
-/* Task 사이드 패널(drawer) 슬라이드/페이드 */
+/* Task 사이드 패널(drawer) 슬라이드/페이드 — 좌측에서 밀려 들어온다 */
 @keyframes drawer-in {
   from {
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
   to {
     transform: translateX(0);

@@ -60,9 +60,10 @@ export default function ProjectDetailPage() {
   const [todos, setTodos] = useState<DetailTodo[]>([])
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
-  // Tasks 칸의 실측 폭 → Task 사이드 패널 폭으로 사용 (패널이 이 칸을 정확히 덮도록)
+  // 화면 왼쪽 끝 ~ Tasks 칸 오른쪽 끝 = 좌측 Task 사이드 패널의 폭
+  // (사이드바 '나의 할 일'과 Tasks 칸까지 덮고, 우측 Todo 는 가리지 않는다)
   const tasksRef = useRef<HTMLElement | null>(null)
-  const [tasksWidth, setTasksWidth] = useState<number | null>(null)
+  const [drawerWidth, setDrawerWidth] = useState<number | null>(null)
   const [taskModal, setTaskModal] = useState<{ open: boolean; taskId: string | null }>({
     open: false,
     taskId: null,
@@ -82,7 +83,13 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     const el = tasksRef.current
     if (!el) return
-    const measure = () => setTasksWidth(el.offsetWidth || null)
+    // getBoundingClientRect 는 #root 의 zoom 이 적용된 값이라, 패널 폭(CSS px)으로 쓰려면 배율로 나눈다.
+    const measure = () => {
+      const root = document.getElementById('root')
+      const zoom = (root && parseFloat(getComputedStyle(root).zoom)) || 1
+      const rightCss = el.getBoundingClientRect().right / zoom
+      setDrawerWidth(rightCss > 0 ? Math.round(rightCss) : null)
+    }
     measure()
     // 창 리사이즈(분할 등)와 사이드바 드래그 양쪽을 모두 잡는다.
     window.addEventListener('resize', measure)
@@ -365,6 +372,62 @@ export default function ProjectDetailPage() {
 
         {/* 좌: Todo / 우: Tasks — Task 사이드 패널(우측 drawer)이 열려도 좌측 Todo가 가려지지 않도록 */}
         <div className="flex items-start gap-4">
+          {/* Tasks — Todo와 정확히 같은 폭(1:1). 이 칸의 우측 끝까지가 Task 사이드 패널(좌측) 폭이 된다 */}
+          <section
+            ref={tasksRef}
+            className="min-w-0 rounded-xl"
+            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
+          >
+            <p
+              className="text-[13px] font-bold text-ink-1"
+              style={{ paddingBottom: 10, marginBottom: 11, borderBottom: '1px solid #E2E0DB' }}
+            >
+              Tasks
+            </p>
+            <button
+              onClick={() => setTaskModal({ open: true, taskId: null })}
+              className="mb-1.5 w-full rounded-lg border border-dashed border-line-strong py-2 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
+            >
+              + 신규 Task 등록
+            </button>
+            <div className="flex flex-col gap-1.5">
+              {tasks.map((t) => {
+                const taskLinks = (t.link_urls ?? []).filter(Boolean)
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-2 rounded-lg border border-line-strong bg-white px-3 py-2 hover:bg-sidebar-bg"
+                  >
+                    <button
+                      onClick={() => setTaskModal({ open: true, taskId: t.id })}
+                      className="min-w-0 flex-1 text-left text-[12.5px]"
+                    >
+                      <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
+                      <span className="text-ink-1">{t.title}</span>
+                      {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
+                    </button>
+                    {taskLinks.length > 0 && (
+                      <span className="flex flex-shrink-0 items-center gap-1.5">
+                        {taskLinks.map((u, i) => (
+                          <a
+                            key={i}
+                            href={toHref(u)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={u}
+                            className="text-[13px] leading-none text-primary hover:underline"
+                          >
+                            ↗
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
           {/* Todo — Tasks와 정확히 같은 폭(1:1) */}
           <section
             className="min-w-0 rounded-xl"
@@ -520,61 +583,6 @@ export default function ProjectDetailPage() {
             </p>
           </section>
 
-          {/* Tasks — Todo와 정확히 같은 폭(1:1). 이 칸의 실측 폭을 Task 사이드 패널에 넘겨 패널이 이 칸을 그대로 덮게 한다 */}
-          <section
-            ref={tasksRef}
-            className="min-w-0 rounded-xl"
-            style={{ flex: '1 1 0', border: '1px solid #E2E0DB', background: '#FBFBFA', padding: '14px 15px' }}
-          >
-            <p
-              className="text-[13px] font-bold text-ink-1"
-              style={{ paddingBottom: 10, marginBottom: 11, borderBottom: '1px solid #E2E0DB' }}
-            >
-              Tasks
-            </p>
-            <button
-              onClick={() => setTaskModal({ open: true, taskId: null })}
-              className="mb-1.5 w-full rounded-lg border border-dashed border-line-strong py-2 text-[12px] font-semibold text-ink-2 hover:bg-sidebar-bg"
-            >
-              + 신규 Task 등록
-            </button>
-            <div className="flex flex-col gap-1.5">
-              {tasks.map((t) => {
-                const taskLinks = (t.link_urls ?? []).filter(Boolean)
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center gap-2 rounded-lg border border-line-strong bg-white px-3 py-2 hover:bg-sidebar-bg"
-                  >
-                    <button
-                      onClick={() => setTaskModal({ open: true, taskId: t.id })}
-                      className="min-w-0 flex-1 text-left text-[12.5px]"
-                    >
-                      <span className="text-ink-3">{fmtDot(t.task_date, true)}</span>{' '}
-                      <span className="text-ink-1">{t.title}</span>
-                      {t.is_misc && <span className="ml-1 text-[10px] text-ink-3">(상설)</span>}
-                    </button>
-                    {taskLinks.length > 0 && (
-                      <span className="flex flex-shrink-0 items-center gap-1.5">
-                        {taskLinks.map((u, i) => (
-                          <a
-                            key={i}
-                            href={toHref(u)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={u}
-                            className="text-[13px] leading-none text-primary hover:underline"
-                          >
-                            ↗
-                          </a>
-                        ))}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
         </div>
       </div>
 
@@ -590,8 +598,8 @@ export default function ProjectDetailPage() {
       <TaskModal
         open={taskModal.open}
         taskId={taskModal.taskId}
-        /* Tasks 칸 폭 + 우측 페이지 여백(28px) → 패널이 Tasks 칸을 정확히 덮는다 */
-        widthPx={tasksWidth ? tasksWidth + 28 : null}
+        /* 화면 왼쪽 끝 ~ Tasks 칸 오른쪽 끝 (우측 Todo 는 가리지 않는다) */
+        widthPx={drawerWidth}
         projectId={project.id}
         projectName={project.name}
         divisionId={project.division_id}
