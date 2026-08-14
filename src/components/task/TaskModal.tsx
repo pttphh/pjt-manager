@@ -75,6 +75,30 @@ export default function TaskModal({
   const [isMisc, setIsMisc] = useState(false)
   const [pjtOptions, setPjtOptions] = useState<PjtOpt[]>([])
   const [assigneeOpen, setAssigneeOpen] = useState<string | null>(null)
+  // 담당자 드롭박스 방향 — 아래 공간이 부족하면 위로 연다(하단 Todo 행에서 잘리던 문제)
+  const [assigneeUp, setAssigneeUp] = useState(false)
+
+  const DROP_MAX_H = 176 // max-h-44 (11rem)
+  /** 버튼 아래 남은 공간이 모자라고 위쪽이 더 넓으면 위로 펼친다 */
+  function openAssignee(key: string, btn: HTMLElement) {
+    if (assigneeOpen === key) {
+      setAssigneeOpen(null)
+      return
+    }
+    // 기준은 창이 아니라 드로어 본문(스크롤 컨테이너) — 하단 푸터에 가려지는 것까지 감안해야 한다
+    let box: HTMLElement | null = btn.parentElement
+    while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement
+    const bounds = box ? box.getBoundingClientRect() : new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+    const r = btn.getBoundingClientRect()
+    const zoom = (() => {
+      const root = document.getElementById('root')
+      return (root && parseFloat(getComputedStyle(root).zoom)) || 1
+    })()
+    const below = (bounds.bottom - r.bottom) / zoom
+    const above = (r.top - bounds.top) / zoom
+    setAssigneeUp(below < DROP_MAX_H + 12 && above > below)
+    setAssigneeOpen(key)
+  }
   const [saving, setSaving] = useState(false)
   const originalTodoIds = useRef<string[]>([])
   const initialSnapRef = useRef('') // 로드 직후 상태 스냅샷
@@ -474,7 +498,7 @@ export default function TaskModal({
             />
             <div className="relative">
               <button
-                onClick={() => setAssigneeOpen((k) => (k === t.key ? null : t.key))}
+                onClick={(e) => openAssignee(t.key, e.currentTarget)}
                 className="flex w-full items-center justify-between rounded-lg border border-line-strong px-2 py-1.5 text-left text-[12px] hover:bg-sidebar-bg"
               >
                 <span className="truncate">
@@ -483,7 +507,11 @@ export default function TaskModal({
                 <span className="text-ink-3">▾</span>
               </button>
               {assigneeOpen === t.key && (
-                <div className="absolute left-0 top-full z-10 mt-1 max-h-44 w-full overflow-y-auto rounded-lg border border-line bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+                <div
+                  className={`absolute left-0 z-10 max-h-44 w-full overflow-y-auto rounded-lg border border-line bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)] ${
+                    assigneeUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                  }`}
+                >
                   {members.length === 0 && (
                     <div className="px-2.5 py-1.5 text-[11px] text-ink-3">멤버를 먼저 추가하세요</div>
                   )}
