@@ -458,14 +458,14 @@ export default function TaskModal({
         Todo <span className="text-[10px] text-ink-3">— 상태 표기·변경 없음</span>
       </div>
       <div className="mb-3.5 rounded-lg border border-line p-2.5">
-        <div className="mb-1 grid grid-cols-[minmax(0,3fr)_110px_130px_30px] gap-2 px-0.5 text-[10px] text-ink-3">
+        <div className="mb-1 grid grid-cols-[minmax(0,3fr)_170px_130px_30px] gap-2 px-0.5 text-[10px] text-ink-3">
           <span>내용</span>
           <span>담당자 (멤버 중 복수)</span>
           <span>PJT</span>
           <span />
         </div>
         {todos.map((t) => (
-          <div key={t.key} className="mb-1.5 grid grid-cols-[minmax(0,3fr)_110px_130px_30px] items-center gap-2">
+          <div key={t.key} className="mb-1.5 grid grid-cols-[minmax(0,3fr)_170px_130px_30px] items-center gap-2">
             <input
               value={t.title}
               onChange={(e) => patchTodo(t.key, { title: e.target.value })}
