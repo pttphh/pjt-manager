@@ -247,6 +247,15 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     await setTodoStatus(todoId, 'published', null)
     void refresh()
   }
+  /** 체크됨 구간에 **지금 보이는** Todo를 한 번에 완료 처리.
+   *  구분 필터가 걸려 있으면 그 범위만 대상이 된다(화면과 동작을 일치시킨다).
+   *  checked_at 은 남겨 둬 완료를 취소하면 다시 checked 로 돌아가게 한다. */
+  async function completeAllChecked(ids: string[]) {
+    if (ids.length === 0) return
+    if (!confirm(`체크된 Todo ${ids.length}건을 모두 완료로 변경할까요?`)) return
+    await supabase.from('todos').update({ status: 'done' }).in('id', ids)
+    void refresh()
+  }
 
   // 그룹의 대표 날짜: 최신순이면 그룹 내 최대 날짜, 오래된순이면 최소 날짜
   function groupDate(todos: { taskDate: string }[]): string {
@@ -359,6 +368,9 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
 
   const unchecked = buildGroups('open')
   const checked = buildGroups('checked')
+  // 일괄 완료 대상 = 체크됨 구간에 지금 보이는 Todo.
+  // 담당자별 보기에서는 한 Todo가 담당자 수만큼 여러 그룹에 나타나므로 중복 제거한다.
+  const checkedIds = [...new Set(checked.flatMap((g) => g.todos.map((t) => t.id)))]
 
   // 사이드바에서 점프해 오면: 그룹 펼치기 → 스크롤 → 잠시 강조
   useEffect(() => {
@@ -661,8 +673,19 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
           <div style={{ borderTop: '1px solid #E2E0DB', marginBottom: 18 }} />
 
           {/* 체크됨 */}
-          <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B', marginBottom: 10 }}>
-            체크됨 <span style={{ fontWeight: 400, color: '#B4B1A9' }}>(진행 중)</span>
+          <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B' }}>
+              체크됨 <span style={{ fontWeight: 400, color: '#B4B1A9' }}>(진행 중)</span>
+            </div>
+            {checkedIds.length > 0 && (
+              <button
+                onClick={() => completeAllChecked(checkedIds)}
+                title="지금 보이는 체크됨 Todo를 모두 완료 처리합니다 (구분 필터 적용 범위)"
+                style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #9CC9B8', background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 14px' }}
+              >
+                ✓ 모두 완료로 변경 ({checkedIds.length})
+              </button>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {checked.length === 0 && (
