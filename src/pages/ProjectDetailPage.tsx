@@ -69,6 +69,7 @@ export default function ProjectDetailPage() {
     taskId: null,
   })
   const [newTodoOpen, setNewTodoOpen] = useState(false)
+  const [showDone, setShowDone] = useState(false) // 완료 Todo는 기본 숨김 (쌓이면 화면을 덮는다)
   const [newTodoTitle, setNewTodoTitle] = useState('')
   const [newTodoAssignees, setNewTodoAssignees] = useState<string[]>([])
   const [assigneeDropOpen, setAssigneeDropOpen] = useState(false)
@@ -552,8 +553,9 @@ export default function ProjectDetailPage() {
                         onChange={() => toggleTodo(t)}
                         className="mt-0.5"
                       />
-                      <span className="min-w-0">
-                        {t.title}
+                      <span className={`min-w-0 ${t.status === 'checked' ? 'text-ink-3' : ''}`}>
+                        {/* 체크된 것은 줄을 그어 남긴다 (완료는 아래 접이식 목록으로 내려간다) */}
+                        {t.status === 'checked' ? <s>{t.title}</s> : t.title}
                         {t.assignees.length > 0 && (
                           <span className="text-[10px] text-ink-3"> — {t.assignees.join(', ')}</span>
                         )}
@@ -574,10 +576,23 @@ export default function ProjectDetailPage() {
                   </div>
                 )
               })}
-              {doneTodos.length > 0 && openTodos.length > 0 && (
-                <div className="my-2 border-t border-line" />
+              {/* 완료된 Todo는 기본으로 감춘다 — 쌓이면 화면을 덮는다.
+                  다만 지워버리지는 않는다: 무엇을 끝냈는지 보고, 잘못 완료한 것을 되돌릴 통로가 필요하다. */}
+              {doneTodos.length > 0 && (
+                <>
+                  {openTodos.length > 0 && <div className="my-2 border-t border-line" />}
+                  <button
+                    onClick={() => setShowDone((v) => !v)}
+                    className="mb-1 flex w-full items-center gap-1.5 rounded px-0.5 py-1 text-left text-[11.5px] text-ink-3 hover:text-ink-1"
+                  >
+                    <span className="inline-block w-2.5">{showDone ? '▾' : '▸'}</span>
+                    완료 {doneTodos.length}건
+                    {!showDone && <span className="text-ink-4">— 눌러서 보기</span>}
+                  </button>
+                </>
               )}
-              {doneTodos.map((t) => {
+              {showDone &&
+                doneTodos.map((t) => {
                 const elsewhere = !!t.todoProjectId && t.todoProjectId !== project.id
                 return (
                   <div key={t.id} className="mb-1.5 flex items-start justify-between gap-2 text-ink-3">
