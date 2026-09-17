@@ -6,6 +6,7 @@ import TaskModal from '../components/task/TaskModal'
 import { supabase } from '../lib/supabase'
 import { emitDataChanged } from '../lib/events'
 import { tagSwatch } from '../lib/colors'
+import { toHref } from '../lib/url'
 import { STATUS_CARD_STYLE, projectColor } from '../types'
 import type { Person, ProjectStatus, Tag, Task, TodoStatus } from '../types'
 
@@ -46,7 +47,6 @@ const fmtDot = (d: string | null, short = false) => {
   return short ? `${y.slice(2)}.${m}.${day}` : `${y}.${m}.${day}`
 }
 /** 프로토콜이 없으면 https:// 를 붙여 상대경로로 해석되는 걸 방지 */
-const toHref = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 const tagColorOf = (t: Tag) =>
   t.color_bg && t.color_fg && t.color_bd
     ? { bg: t.color_bg, fg: t.color_fg, bd: t.color_bd }

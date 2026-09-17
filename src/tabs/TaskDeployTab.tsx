@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { renderBold } from '../lib/markdown'
+import { toHref } from '../lib/url'
 import type { TodoStatus } from '../types'
 
 interface DeployTodo {
@@ -15,6 +16,7 @@ interface DeployTask {
   title: string
   task_date: string
   decisions: string | null
+  links: string[] // Task 링크 — 배포 시 지시사항과 함께 전달된다
   projectName: string
   members: string[]
   todos: DeployTodo[]
@@ -24,6 +26,7 @@ interface RawDeploy {
   title: string
   task_date: string
   decisions: string | null
+  link_urls?: string[] | null
   projects: { name: string } | null
   task_members: { people: { name: string } | null }[] | null
   todos:
@@ -81,8 +84,9 @@ export default function TaskDeployTab() {
     try {
       const { data } = await supabase
         .from('tasks')
+        // '*' 로 받아 migrations/009(link_urls) 미적용이어도 쿼리가 깨지지 않게 한다
         .select(
-          'id, title, task_date, decisions, projects(name), task_members(people(name)), todos(id, title, status, sort_order, todo_assignees(people(name)))',
+          '*, projects(name), task_members(people(name)), todos(id, title, status, sort_order, todo_assignees(people(name)))',
         )
       const rows: DeployTask[] = (((data as unknown as RawDeploy[]) ?? []) as RawDeploy[])
         .map((t) => ({
@@ -90,6 +94,7 @@ export default function TaskDeployTab() {
           title: t.title,
           task_date: t.task_date,
           decisions: t.decisions,
+          links: (t.link_urls ?? []).filter(Boolean),
           projectName: t.projects?.name ?? '(프로젝트 없음)',
           members: (t.task_members ?? []).map((m) => m.people?.name).filter(Boolean) as string[],
           todos: (t.todos ?? [])
@@ -253,6 +258,28 @@ export default function TaskDeployTab() {
                 {t.decisions ? renderBold(t.decisions) : '—'}
               </div>
             </div>
+
+            {/* 링크 — 지시사항과 함께 전달되는 참고 자료. 없는 Task가 대부분이라 있을 때만 표시한다 */}
+            {t.links.length > 0 && (
+              <div style={{ background: '#FBFBFA', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
+                <div style={SEC_LABEL}>링크</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {t.links.map((u, i) => (
+                    <a
+                      key={i}
+                      href={toHref(u)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="새 창으로 열기"
+                      className="min-w-0 truncate hover:underline"
+                      style={{ fontSize: '12px', color: '#185FA5' }}
+                    >
+                      {u} ↗
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Todo 목록: draft 정상 + 배포됨/체크/완료는 회색 */}
             <div style={{ background: '#fff', padding: '10px 13px', borderTop: '1px solid #E2E0DB' }}>
