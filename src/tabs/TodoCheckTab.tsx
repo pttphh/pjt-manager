@@ -506,8 +506,13 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
                                 background: '#E6F1FB',
                                 boxShadow: '0 0 0 2px #185FA5',
                                 borderRadius: 8,
-                                padding: '11px 9px 9px',
-                                margin: '0 -9px',
+                                // 축약형(padding)을 쓰면 기본 paddingTop 과 섞여, 강조가 풀릴 때
+                                // React 가 여백을 제대로 되돌리지 못한다 — 개별 속성만 쓴다
+                                paddingRight: 9,
+                                paddingBottom: 9,
+                                paddingLeft: 9,
+                                marginLeft: -9,
+                                marginRight: -9,
                               }
                             : null),
                         }}
