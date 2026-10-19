@@ -34,6 +34,7 @@ VITE_APP_PASSWORD=        # 입장 비밀번호(단일)
 9. `migrations/009-task-links.sql` — Task 링크(link_urls 배열)
 10. `migrations/010-todo-checked-at.sql` — Todo 체크 이력(checked_at). ※ 011에서 '체크' 상태가 폐지되어 현재는 미사용
 11. `migrations/011-todo-reviewed-at.sql` — 사이드바 '업데이트'(진행사항 확인 시각 reviewed_at) + '체크' 상태 폐지(기존 체크 → 미진행)
+12. `migrations/012-todo-done-at.sql` — Todo 완료 시각(done_at)을 **DB 트리거**로 기록. Todo 체크 탭 '최근 활동'용
 
 > 기존 DB(구 스키마)를 쓰고 있다면 `migrations/005-todo-level-deploy.sql`도 실행
 > (Task 단위 배포 → Todo 단위 배포 전환. 새 설치는 불필요 — schema-v2.sql에 이미 반영됨)

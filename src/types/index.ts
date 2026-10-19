@@ -66,6 +66,8 @@ export interface Todo {
   /** 진행사항을 '확인'한 시각 (migrations/011). 최신 메모가 이보다 새것이면 사이드바 '업데이트'에 뜬다.
    *  상태(status)와 무관 — 확인은 진행 단계가 아니다. */
   reviewed_at?: string | null
+  /** 완료 시각 (migrations/012, DB 트리거가 기록 — 완료 취소 시 null). 012 이전 완료분은 null */
+  done_at?: string | null
   /** @deprecated 'checked' 상태 폐지로 더 이상 쓰지 않음 (migrations/010, 컬럼은 롤백 대비로 남김) */
   checked_at?: string | null
   sort_order: number
