@@ -49,7 +49,6 @@ const md = (d: string | null) => {
 
 const STATUS_LABEL: Record<Exclude<TodoStatus, 'draft'>, string> = {
   published: '배포됨',
-  checked: '체크',
   done: '완료',
 }
 
@@ -294,7 +293,8 @@ export default function TaskDeployTab() {
                     <span className="min-w-0 truncate" style={{ fontSize: '12.5px', color: isDraft ? '#1F1E1B' : '#B4B1A9' }}>
                       {!isDraft && (
                         <span style={{ fontSize: '10px', marginRight: 6 }}>
-                          [{STATUS_LABEL[td.status as Exclude<TodoStatus, 'draft'>]}]
+                          {/* migrations/011 적용 전 남아 있을 수 있는 옛 'checked' 는 진행 중(배포됨)으로 표기 */}
+                          [{STATUS_LABEL[td.status as Exclude<TodoStatus, 'draft'>] ?? STATUS_LABEL.published}]
                         </span>
                       )}
                       {td.title}

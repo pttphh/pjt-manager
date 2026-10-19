@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { emitDataChanged } from '../lib/events'
-import type { Division, TodoStatus } from '../types'
+import { hasUnreviewedUpdate, latestMemoTime, markReviewed } from '../lib/updates'
+import type { Division } from '../types'
 
 type ViewMode = 'pjt' | 'task' | 'person'
 // 정렬: Task 작성일 기준 최신순/오래된순
 type SortOrder = 'newest' | 'oldest'
-/** 이 탭에 노출되는 Todo 상태 — **배포된 것만**(담당자 무관).
- *  미진행 구간 = published, 체크됨 구간 = checked. draft(미배포)·done 은 노출하지 않는다. */
-type ShownStatus = 'published' | 'checked'
-type Section = 'open' | 'checked'
+/* 이 탭에 노출되는 Todo = **배포된(published) 것만**(담당자 무관). draft(미배포)·done 은 노출하지 않는다.
+ * '체크' 상태는 폐지됐다(migrations/011) — 진행 중인 Todo는 한 구간에 모이고, 완료는 '완료' 버튼으로 바로 간다. */
 
 interface TodoItem {
   id: string
   title: string
-  status: ShownStatus
   taskId: string
   taskTitle: string
   taskDate: string
@@ -25,6 +23,8 @@ interface TodoItem {
   assignees: string[]
   latestMemo: { content: string; date: string } | null
   memos: { id: string; content: string; date: string }[] // 최신순
+  latestMemoAt: string | null // 확인 시 이 시각을 reviewed_at 으로 기록한다 (lib/updates)
+  unreviewed: boolean // 사이드바 '업데이트'에 떠 있는 Todo (= 확인하지 않은 새 진행사항)
 }
 interface RawTask {
   id: string
@@ -36,6 +36,7 @@ interface RawTask {
         id: string
         title: string
         status: string
+        reviewed_at?: string | null // migrations/011 미적용이면 없다
         projects: { id: string; name: string; division_id: string } | null
         todo_assignees: { people: { name: string } | null }[] | null
         todo_memos: { id: string; content: string; created_at: string }[] | null
@@ -65,18 +66,16 @@ const md = (d: string | null) => {
   return isNaN(dt.getTime()) ? '' : `${dt.getMonth() + 1}/${dt.getDate()}`
 }
 
-// 단일 상태 뱃지 (Todo 자체 상태 기준): 배포(published) → 체크(checked)
-function StatusBadge({ status }: { status: ShownStatus }) {
-  const s =
-    status === 'checked'
-      ? { bg: '#E6F1FB', fg: '#0C447C', bd: '#B8D4EF', label: '체크' }
-      : { bg: '#E1F5EE', fg: '#085041', bd: '#B7E3D3', label: '배포' }
+/* '체크' 상태가 폐지되면서 이 탭의 Todo는 전부 '배포' 상태다 → 상태 뱃지는 정보가 없어 없앴다.
+ * 대신 확인하지 않은 새 진행사항이 있는 Todo에만 '업데이트' 표시를 붙인다(사이드바 '업데이트'와 같은 기준). */
+function UpdateBadge() {
   return (
     <span
+      title="확인하지 않은 새 진행사항이 있습니다"
       style={{
-        background: s.bg,
-        color: s.fg,
-        border: `1px solid ${s.bd}`,
+        background: '#E6F1FB',
+        color: '#0C447C',
+        border: '1px solid #B8D4EF',
         fontSize: 10,
         fontWeight: 600,
         padding: '1px 7px',
@@ -85,7 +84,7 @@ function StatusBadge({ status }: { status: ShownStatus }) {
         flex: '0 0 auto',
       }}
     >
-      {s.label}
+      업데이트
     </span>
   )
 }
@@ -132,11 +131,11 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     try {
       const [{ data: divData }, { data: taskData }] = await Promise.all([
         supabase.from('divisions').select('*').order('sort_order'),
-        // 노출 기준: todos.status in ('published','checked') — 미배포(draft)·완료(done)는 제외
+        // 노출 기준: 배포(published)만. todos 는 '*' 로 받아 migrations/011(reviewed_at) 미적용이어도 깨지지 않게.
         supabase
           .from('tasks')
           .select(
-            'id, title, task_date, projects(name), todos(id, title, status, projects(id, name, division_id), todo_assignees(people(name)), todo_memos(id, content, created_at))',
+            'id, title, task_date, projects(name), todos(*, projects(id, name, division_id), todo_assignees(people(name)), todo_memos(id, content, created_at))',
           ),
       ])
       setDivisions((divData as Division[]) ?? [])
@@ -144,18 +143,19 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       const flat: TodoItem[] = []
       for (const t of (taskData as unknown as RawTask[]) ?? []) {
         for (const td of t.todos ?? []) {
-          // 배포된 것만 — 담당자가 누구든 미배포는 배포 탭에서 배포해야 여기 올라온다
+          // 배포된 것만 — 담당자가 누구든 미배포는 배포 탭에서 배포해야 여기 올라온다.
+          // 'checked' 는 폐지된 상태지만 migrations/011 적용 전에는 남아 있을 수 있어 진행 중으로 함께 보여준다.
           if (td.status !== 'published' && td.status !== 'checked') continue
           const assignees = (td.todo_assignees ?? [])
             .map((a) => a.people?.name)
             .filter(Boolean) as string[]
           const memos = (td.todo_memos ?? [])
             .slice()
-            .sort((a, b) => b.created_at.localeCompare(a.created_at))
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          const latestAt = latestMemoTime(td.todo_memos)
           flat.push({
             id: td.id,
             title: td.title,
-            status: td.status as ShownStatus,
             taskId: t.id,
             taskTitle: t.title,
             taskDate: t.task_date,
@@ -166,6 +166,9 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
             assignees,
             latestMemo: memos[0] ? { content: memos[0].content, date: md(memos[0].created_at) } : null,
             memos: memos.map((m) => ({ id: m.id, content: m.content, date: md(m.created_at) })),
+            latestMemoAt: latestAt,
+            // reviewed_at 컬럼이 아직 없으면(011 미적용) 판정하지 않는다 — 안 그러면 메모 있는 Todo가 전부 미확인으로 쏟아진다
+            unreviewed: 'reviewed_at' in td && hasUnreviewedUpdate(latestAt, td.reviewed_at),
           })
         }
       }
@@ -191,29 +194,26 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       savingRef.current.delete(todoId)
     }
   }
-  // 상태 변경 공용 — migrations/010(checked_at) 미적용 시에도 깨지지 않도록 폴백
-  async function setTodoStatus(todoId: string, status: TodoStatus, checkedAt?: string | null) {
-    const patch = checkedAt === undefined ? { status } : { status, checked_at: checkedAt }
-    const { error } = await supabase.from('todos').update(patch).eq('id', todoId)
-    if (error && (error.code === 'PGRST204' || error.code === '42703')) {
-      await supabase.from('todos').update({ status }).eq('id', todoId)
-    }
-  }
-
-  // 체크(상태 변경) — 저장과 분리. 입력 중이던 메모가 있으면 데이터 손실 방지 위해 함께 저장.
-  async function checkTodo(todoId: string) {
+  // 완료 — published → done. 입력 중이던 메모가 있으면 데이터 손실 방지 위해 먼저 저장한다.
+  // (완료한 Todo는 이 탭과 사이드바에서 빠지고, 세부화면 '완료 n건'에서 되돌릴 수 있다)
+  async function completeTodo(todoId: string) {
     if (savingRef.current.has(todoId)) return
     savingRef.current.add(todoId)
     try {
       const content = (memoInputs[todoId] ?? '').trim()
       if (content) await supabase.from('todo_memos').insert({ todo_id: todoId, content })
-      // 체크를 거쳤음을 기록 → 나중에 완료를 해제하면 메모 유무와 무관하게 checked 로 복귀
-      await setTodoStatus(todoId, 'checked', new Date().toISOString())
+      await supabase.from('todos').update({ status: 'done' }).eq('id', todoId)
       setMemoInputs((m) => ({ ...m, [todoId]: '' }))
       void refresh()
     } finally {
       savingRef.current.delete(todoId)
     }
+  }
+
+  // 확인 — 새 진행사항을 봤다고 기록. 사이드바 '업데이트'에서 빠진다(상태는 그대로 진행 중).
+  async function reviewTodo(todoId: string, latestMemoAt: string | null) {
+    if (!latestMemoAt) return
+    if (await markReviewed(todoId, latestMemoAt)) void load()
   }
   // 저장된 메모 수정/삭제 (연필 버튼에서 진입)
   async function updateMemo(memoId: string, content: string) {
@@ -235,25 +235,6 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     if (!confirm('이 메모를 삭제할까요?')) return
     await supabase.from('todo_memos').delete().eq('id', memoId)
     setEditingMemo(null)
-    void refresh()
-  }
-  async function completeTodo(todoId: string) {
-    // checked_at 은 그대로 둔다 — 완료를 해제하면 다시 checked 로 돌아가야 하므로
-    await setTodoStatus(todoId, 'done')
-    void refresh()
-  }
-  async function uncheckTodo(todoId: string) {
-    // 체크 해제 → 미진행(published) 복귀. 체크 이력도 지운다(메모 이력·배포 상태는 유지)
-    await setTodoStatus(todoId, 'published', null)
-    void refresh()
-  }
-  /** 체크됨 구간에 **지금 보이는** Todo를 한 번에 완료 처리.
-   *  구분 필터가 걸려 있으면 그 범위만 대상이 된다(화면과 동작을 일치시킨다).
-   *  checked_at 은 남겨 둬 완료를 취소하면 다시 checked 로 돌아가게 한다. */
-  async function completeAllChecked(ids: string[]) {
-    if (ids.length === 0) return
-    if (!confirm(`체크된 Todo ${ids.length}건을 모두 완료로 변경할까요?`)) return
-    await supabase.from('todos').update({ status: 'done' }).in('id', ids)
     void refresh()
   }
 
@@ -280,13 +261,10 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
       })
   }
 
-  function buildGroups(section: Section): Group[] {
-    // 미진행 구간 = published, 체크됨 구간 = checked
-    const inSection = (s: ShownStatus) => (section === 'checked' ? s === 'checked' : s !== 'checked')
-    const filtered = items.filter(
-      (it) => inSection(it.status) && (filter === 'all' || it.divisionId === filter),
-    )
-    const status = section
+  function buildGroups(): Group[] {
+    // 진행 중인 Todo는 한 구간에 모인다 ('체크됨' 구간은 폐지 — migrations/011)
+    const filtered = items.filter((it) => filter === 'all' || it.divisionId === filter)
+    const status = 'open'
     if (view === 'pjt') {
       // PJT 단위 아코디언 — 기준은 todo.project_id(Todo가 속한 PJT, Task의 PJT가 아님)
       const order: { id: string; name: string }[] = []
@@ -366,11 +344,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     )
   }
 
-  const unchecked = buildGroups('open')
-  const checked = buildGroups('checked')
-  // 일괄 완료 대상 = 체크됨 구간에 지금 보이는 Todo.
-  // 담당자별 보기에서는 한 Todo가 담당자 수만큼 여러 그룹에 나타나므로 중복 제거한다.
-  const checkedIds = [...new Set(checked.flatMap((g) => g.todos.map((t) => t.id)))]
+  const unchecked = buildGroups()
 
   // 사이드바에서 점프해 오면: 그룹 펼치기 → 스크롤 → 잠시 강조
   useEffect(() => {
@@ -378,7 +352,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
     const target = items.find((it) => it.id === focusTodoId)
     if (!target) return
     // 해당 Todo가 들어 있는 그룹을 펼친다 (접힘 상태를 명시적으로 해제)
-    const keys = [...unchecked, ...checked]
+    const keys = unchecked
       .filter((g) => g.todos.some((t) => t.id === focusTodoId))
       .map((g) => g.key)
     if (keys.length) {
@@ -540,7 +514,7 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
                       >
                         <div className="mb-[7px] flex items-center justify-between gap-2.5">
                           <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex min-w-0 flex-1 items-center gap-2">
-                            <StatusBadge status={td.status} />
+                            {td.unreviewed && <UpdateBadge />}
                             {editingTodo?.id === td.id ? (
                               <>
                                 <input
@@ -653,160 +627,25 @@ export default function TodoCheckTab({ focusTodoId, onFocusDone }: TodoCheckTabP
                               저장
                             </button>
                           </div>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1.5">
+                            {/* 확인 = 새 진행사항을 봤다(사이드바 '업데이트'에서 빠짐). 상태는 그대로 진행 중 */}
+                            {td.unreviewed && (
+                              <button
+                                onClick={() => reviewTodo(td.id, td.latestMemoAt)}
+                                title="새 진행사항을 확인했습니다 — 업데이트 목록에서 빠집니다"
+                                style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #185FA5', background: '#fff', color: '#185FA5', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 16px' }}
+                              >
+                                확인
+                              </button>
+                            )}
+                            {/* 완료 = 진행 단계 종료(published → done) */}
                             <button
-                              onClick={() => checkTodo(td.id)}
-                              style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #185FA5', background: '#185FA5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 18px' }}
+                              onClick={() => completeTodo(td.id)}
+                              style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #085041', background: '#085041', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 18px' }}
                             >
-                              체크
+                              완료
                             </button>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ borderTop: '1px solid #E2E0DB', marginBottom: 18 }} />
-
-          {/* 체크됨 */}
-          <div className="flex items-center justify-between gap-3" style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1F1E1B' }}>
-              체크됨 <span style={{ fontWeight: 400, color: '#B4B1A9' }}>(진행 중)</span>
-            </div>
-            {checkedIds.length > 0 && (
-              <button
-                onClick={() => completeAllChecked(checkedIds)}
-                title="지금 보이는 체크됨 Todo를 모두 완료 처리합니다 (구분 필터 적용 범위)"
-                style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #9CC9B8', background: '#E1F5EE', color: '#085041', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 14px' }}
-              >
-                ✓ 모두 완료로 변경 ({checkedIds.length})
-              </button>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {checked.length === 0 && (
-              <div style={{ fontSize: '12px', color: '#B4B1A9', padding: '6px 2px' }}>체크된 Todo가 없습니다.</div>
-            )}
-            {checked.map((g) => (
-              <div key={g.key} style={{ border: '1px solid #E2E0DB', borderRadius: 10, overflow: 'hidden' }}>
-                <button
-                  onClick={() => toggle(g.key)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    background: '#F5F4F0',
-                    border: 0,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    padding: '10px 13px',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ minWidth: 0, fontSize: '13px', color: '#1F1E1B' }}>
-                    <span style={{ display: 'inline-block', width: 14, marginRight: 4, color: '#55534E' }}>
-                      {isOpen(g.key) ? '▾' : '▸'}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>{g.name}</span>{' '}
-                    <span style={{ color: '#8A877F' }}>{g.metaLine}</span>
-                  </span>
-                  <span style={{ flex: '0 0 auto', fontSize: '11.5px', color: '#8A877F', whiteSpace: 'nowrap' }}>
-                    체크 {g.count}건
-                  </span>
-                </button>
-                {isOpen(g.key) && (
-                  <div style={{ padding: '2px 13px 12px', background: '#fff' }}>
-                    {g.todos.map((td) => (
-                      <div
-                        key={td.id}
-                        ref={(el) => (todoRefs.current[td.id] = el)}
-                        style={{
-                          paddingTop: 11,
-                          ...(highlightId === td.id
-                            ? {
-                                background: '#E6F1FB',
-                                boxShadow: '0 0 0 2px #185FA5',
-                                borderRadius: 8,
-                                padding: '11px 9px 9px',
-                                margin: '0 -9px',
-                              }
-                            : null),
-                        }}
-                      >
-                        <div className="mb-[7px] flex items-center justify-between gap-2.5">
-                          <span style={{ minWidth: 0, fontSize: '12.5px', color: '#1F1E1B' }} className="flex min-w-0 flex-1 items-center gap-2">
-                            <StatusBadge status={td.status} />
-                            {editingTodo?.id === td.id ? (
-                              <>
-                                <input
-                                  value={editingTodo.title}
-                                  onChange={(e) => setEditingTodo({ id: td.id, title: e.target.value })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') updateTodoTitle(td.id, editingTodo.title)
-                                    if (e.key === 'Escape') setEditingTodo(null)
-                                  }}
-                                  autoFocus
-                                  style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', border: '1px solid #CFCDC7', borderRadius: 8, padding: '5px 9px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1F1E1B' }}
-                                />
-                                <button
-                                  onClick={() => updateTodoTitle(td.id, editingTodo.title)}
-                                  style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '11.5px', fontWeight: 600, borderRadius: 7, padding: '4px 11px' }}
-                                >
-                                  저장
-                                </button>
-                                <button
-                                  onClick={() => setEditingTodo(null)}
-                                  title="취소"
-                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', color: '#B4B1A9', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', padding: '0 2px', lineHeight: 1 }}
-                                >
-                                  ✕
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="min-w-0">{td.title}</span>
-                                <button
-                                  onClick={() => setEditingTodo({ id: td.id, title: td.title })}
-                                  title="Todo 내용 수정"
-                                  style={{ flex: '0 0 auto', border: 0, background: 'transparent', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1, opacity: 0.65 }}
-                                >
-                                  ✏️
-                                </button>
-                              </>
-                            )}
-                          </span>
-                          <span style={{ flex: '0 0 auto', fontSize: '11px', color: '#8A877F', whiteSpace: 'nowrap' }}>
-                            {td.metaLabel}: {td.metaValue}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 pl-[22px]">
-                          <span style={{ flex: 1, minWidth: 0, background: '#F5F4F0', borderRadius: 8, padding: '7px 10px', fontSize: '12px', color: '#55534E' }}>
-                            {td.latestMemo ? (
-                              <>
-                                <span style={{ color: '#8A877F' }}>{td.latestMemo.date}</span> — {td.latestMemo.content}
-                              </>
-                            ) : (
-                              <span style={{ color: '#8A877F' }}>메모 없음</span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => uncheckTodo(td.id)}
-                            style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #CFCDC7', background: '#fff', color: '#55534E', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 12px' }}
-                          >
-                            체크 해제
-                          </button>
-                          <button
-                            onClick={() => completeTodo(td.id)}
-                            style={{ flex: '0 0 auto', whiteSpace: 'nowrap', border: '1px solid #9CC9B8', background: '#fff', color: '#085041', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, borderRadius: 8, padding: '6px 12px' }}
-                          >
-                            ✓ 완료로 변경
-                          </button>
                         </div>
                       </div>
                     ))}

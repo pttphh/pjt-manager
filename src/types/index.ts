@@ -1,6 +1,7 @@
 export type ProjectStatus = 'pending' | 'active' | 'hold' | 'done'
-// 배포는 Todo 단위: draft(미배포) → published(배포/미진행) → checked(체크) → done(완료)
-export type TodoStatus = 'draft' | 'published' | 'checked' | 'done'
+// 배포는 Todo 단위: draft(미배포) → published(배포/진행) → done(완료)
+// ('checked' 상태는 폐지 — migrations/011. 진행사항 '확인'은 상태가 아니라 reviewed_at 으로 관리)
+export type TodoStatus = 'draft' | 'published' | 'done'
 
 export interface Division {
   id: string
@@ -62,8 +63,10 @@ export interface Todo {
   title: string
   status: TodoStatus
   deployed_at?: string | null // 배포 시각 (미배포 복귀 시 null)
-  /** 체크(checked) 단계를 거친 시각 (migrations/010). 체크 해제 시 null.
-   *  완료(done) 해제 시 checked 로 되돌릴지 판단하는 근거 — 메모 유무로 추정하지 않는다. */
+  /** 진행사항을 '확인'한 시각 (migrations/011). 최신 메모가 이보다 새것이면 사이드바 '업데이트'에 뜬다.
+   *  상태(status)와 무관 — 확인은 진행 단계가 아니다. */
+  reviewed_at?: string | null
+  /** @deprecated 'checked' 상태 폐지로 더 이상 쓰지 않음 (migrations/010, 컬럼은 롤백 대비로 남김) */
   checked_at?: string | null
   sort_order: number
   todo_assignees?: { people: Person }[]
